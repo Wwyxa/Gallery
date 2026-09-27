@@ -70,6 +70,7 @@ import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.gallery.R
 import org.fossify.gallery.activities.BaseViewerActivity
 import org.fossify.gallery.activities.VideoActivity
+import org.fossify.gallery.activities.ViewPagerActivity
 import org.fossify.gallery.databinding.PagerVideoItemBinding
 import org.fossify.gallery.extensions.config
 import org.fossify.gallery.extensions.getActionBarHeight
@@ -82,6 +83,7 @@ import org.fossify.gallery.helpers.Config
 import org.fossify.gallery.helpers.EXOPLAYER_MAX_BUFFER_MS
 import org.fossify.gallery.helpers.EXOPLAYER_MIN_BUFFER_MS
 import org.fossify.gallery.helpers.FAST_FORWARD_VIDEO_MS
+import org.fossify.gallery.helpers.getMediumExtendedDetails
 import org.fossify.gallery.helpers.MEDIUM
 import org.fossify.gallery.helpers.SHOULD_INIT_FRAGMENT
 import org.fossify.gallery.interfaces.PlaybackSpeedListener
@@ -605,9 +607,15 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
     }
 
     private fun checkExtendedDetails() {
+        if (activity is ViewPagerActivity) {
+            // extended details are shown in the action bar by ViewPagerActivity
+            binding.videoDetails.beGone()
+            return
+        }
+
         if (mConfig.showExtendedDetails) {
             binding.videoDetails.apply {
-                text = getMediumExtendedDetails(mMedium)
+                text = context.getMediumExtendedDetails(mMedium)
                 beVisibleIf(text.isNotEmpty())
                 alpha = if (!mConfig.hideExtendedDetails || !mIsFullscreen) 1f else 0f
                 (activity as? BaseViewerActivity)?.applyProperHorizontalInsets(this)
