@@ -36,9 +36,26 @@
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/medium_viewer_toolbar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
+            android:layout_height="wrap_content"
+            android:minHeight="?attr/actionBarSize"
             app:menu="@menu/menu_viewpager"
-            app:navigationIcon="@drawable/ic_arrow_left_vector" />
+            app:navigationIcon="@drawable/ic_arrow_left_vector">
+
+            <org.fossify.commons.views.MyTextView
+                android:id="@+id/medium_viewer_details"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_marginEnd="@dimen/medium_margin"
+                android:shadowColor="#99000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="6"
+                android:textColor="@color/theme_dark_text_color"
+                android:textSize="@dimen/smaller_text_size"
+                android:visibility="gone" />
+
+        </com.google.android.material.appbar.MaterialToolbar>
 
     </com.google.android.material.appbar.AppBarLayout>
 </RelativeLayout>

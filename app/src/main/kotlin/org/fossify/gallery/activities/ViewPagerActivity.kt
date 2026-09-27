@@ -22,7 +22,6 @@ import android.graphics.drawable.Icon
 import android.os.Bundle
 import android.os.Handler
 import android.provider.MediaStore
-import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
@@ -46,6 +45,7 @@ import org.fossify.commons.extensions.beGone
 import org.fossify.commons.extensions.beVisible
 import org.fossify.commons.extensions.beVisibleIf
 import org.fossify.commons.extensions.convertToBitmap
+import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.extensions.formatSize
 import org.fossify.commons.extensions.getColoredDrawableWithColor
 import org.fossify.commons.extensions.getDataColumn
@@ -146,6 +146,7 @@ import org.fossify.gallery.helpers.BOTTOM_ACTION_TOGGLE_FAVORITE
 import org.fossify.gallery.helpers.BOTTOM_ACTION_TOGGLE_VISIBILITY
 import org.fossify.gallery.helpers.ColorModeHelper
 import org.fossify.gallery.helpers.DefaultPageTransformer
+import org.fossify.gallery.helpers.EXT_NAME
 import org.fossify.gallery.helpers.FadePageTransformer
 import org.fossify.gallery.helpers.GO_TO_NEXT_ITEM
 import org.fossify.gallery.helpers.GO_TO_PREV_ITEM
@@ -177,6 +178,7 @@ import org.fossify.gallery.helpers.TYPE_PORTRAITS
 import org.fossify.gallery.helpers.TYPE_RAWS
 import org.fossify.gallery.helpers.TYPE_SVGS
 import org.fossify.gallery.helpers.TYPE_VIDEOS
+import org.fossify.gallery.helpers.getMediumExtendedDetails
 import org.fossify.gallery.helpers.getPermissionToRequest
 import org.fossify.gallery.models.Medium
 import org.fossify.gallery.models.ThumbnailItem
@@ -256,6 +258,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
 
         val filename = getCurrentMedium()?.name ?: mPath.getFilenameFromPath()
         binding.mediumViewerToolbar.title = filename
+        updateExtendedDetails()
     }
 
     override fun onPause() {
@@ -318,13 +321,6 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                 findItem(R.id.menu_restore_file).isVisible = currentMedium.path.startsWith(recycleBinPath)
                 findItem(R.id.menu_create_shortcut).isVisible = true
                 findItem(R.id.menu_change_orientation).isVisible = rotationDegrees == 0 && visibleBottomActions and BOTTOM_ACTION_CHANGE_ORIENTATION == 0
-                findItem(R.id.menu_rotate).setShowAsAction(
-                    if (rotationDegrees != 0) {
-                        MenuItem.SHOW_AS_ACTION_ALWAYS
-                    } else {
-                        MenuItem.SHOW_AS_ACTION_IF_ROOM
-                    }
-                )
             }
 
             if (visibleBottomActions != 0) {
@@ -811,6 +807,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                 getCurrentMedia()[mPos] = this
             }
 
+            updateExtendedDetails()
             refreshMenuItems()
             callback?.invoke()
         }
@@ -1504,6 +1501,37 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
             val medium = getCurrentMedium()
             if (medium != null) {
                 binding.mediumViewerToolbar.title = medium.path.getFilenameFromPath()
+            }
+            updateExtendedDetails()
+        }
+    }
+
+    private fun updateExtendedDetails() {
+        val medium = getCurrentMedium()
+        if (!config.showExtendedDetails || medium == null) {
+            binding.mediumViewerDetails.beGone()
+            return
+        }
+
+        // 详情通常已含文件名（EXT_NAME），显示详情时清空标题避免重复
+        if (config.extendedDetails and EXT_NAME != 0) {
+            binding.mediumViewerToolbar.title = ""
+        }
+
+        ensureBackgroundThread {
+            val details = getMediumExtendedDetails(medium)
+            runOnUiThread {
+                if (getCurrentMedium()?.path == medium.path) {
+                    binding.mediumViewerDetails.apply {
+                        text = details
+                        if (details.isNotEmpty()) {
+                            beVisible()
+                        } else {
+                            beGone()
+                            binding.mediumViewerToolbar.title = medium.path.getFilenameFromPath()
+                        }
+                    }
+                }
             }
         }
     }
