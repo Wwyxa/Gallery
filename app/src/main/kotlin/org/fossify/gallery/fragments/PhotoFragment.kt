@@ -84,6 +84,7 @@ import org.fossify.gallery.extensions.config
 import org.fossify.gallery.extensions.getBottomActionsHeight
 import org.fossify.gallery.extensions.sendFakeClick
 import org.fossify.gallery.helpers.ColorModeHelper
+import org.fossify.gallery.helpers.getMediumExtendedDetails
 import org.fossify.gallery.helpers.HIGH_TILE_DPI
 import org.fossify.gallery.helpers.LOW_TILE_DPI
 import org.fossify.gallery.helpers.MAX_ZOOM_EQUALITY_TOLERANCE
@@ -913,9 +914,15 @@ class PhotoFragment : ViewPagerFragment() {
     }
 
     private fun initExtendedDetails() {
+        if (activity is ViewPagerActivity) {
+            // extended details are shown in the action bar by ViewPagerActivity
+            binding.photoDetails.beGone()
+            return
+        }
+
         if (requireContext().config.showExtendedDetails) {
             ensureBackgroundThread {
-                val details = getMediumExtendedDetails(mMedium)
+                val details = context?.getMediumExtendedDetails(mMedium) ?: ""
                 activity?.runOnUiThread {
                     binding.photoDetails.apply {
                         text = details
