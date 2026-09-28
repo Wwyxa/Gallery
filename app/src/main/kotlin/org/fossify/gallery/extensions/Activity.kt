@@ -1,6 +1,7 @@
 package org.fossify.gallery.extensions
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.ContentProviderOperation
 import android.content.ContentValues
 import android.content.Intent
@@ -13,6 +14,7 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
 import android.net.Uri
 import android.os.Environment
+import android.os.TransactionTooLargeException
 import android.provider.MediaStore
 import android.provider.MediaStore.Files
 import android.provider.MediaStore.Images
@@ -40,6 +42,7 @@ import org.fossify.gallery.activities.MediaActivity
 import org.fossify.gallery.activities.SettingsActivity
 import org.fossify.gallery.activities.SimpleActivity
 import org.fossify.gallery.activities.VideoPlayerActivity
+import org.fossify.gallery.contentproviders.ShareFileProvider
 import org.fossify.gallery.dialogs.AllFilesPermissionDialog
 import org.fossify.gallery.dialogs.PickDirectoryDialog
 import org.fossify.gallery.dialogs.ResizeMultipleImagesDialog
@@ -54,11 +57,79 @@ import java.util.Locale
 import androidx.core.net.toUri
 
 fun Activity.sharePath(path: String) {
-    sharePathIntent(path, BuildConfig.APPLICATION_ID)
+    sharePaths(arrayListOf(path))
 }
 
 fun Activity.sharePaths(paths: ArrayList<String>) {
-    sharePathsIntent(paths, BuildConfig.APPLICATION_ID)
+    ensureBackgroundThread {
+        val uris = ArrayList<Uri>(paths.size)
+        for (path in paths) {
+            // MediaStore-indexed files share a media content uri. Unindexed ones (e.g. inside
+            // .nomedia folders) fall back to our FileProvider uri, whose rejection of _data
+            // queries makes receivers that resolve uris to real file paths (metadata editors)
+            // report the file as missing. Route those through ShareFileProvider instead, which
+            // answers both _data queries and stream reads.
+            var uri = getFinalUriFromPath(path, BuildConfig.APPLICATION_ID) ?: return@ensureBackgroundThread
+            if (uri.authority == "${BuildConfig.APPLICATION_ID}.provider") {
+                uri = ShareFileProvider.getUriForFile(applicationContext, File(path))
+            }
+            uris.add(uri)
+        }
+
+        if (uris.size == 1) {
+            val path = paths.first()
+            val uri = uris.first()
+            Intent().apply {
+                action = Intent.ACTION_SEND
+                putExtra(Intent.EXTRA_STREAM, uri)
+                type = getUriMimeType(path, uri).normalizeMimeTypeForSharing()
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+                try {
+                    startActivity(Intent.createChooser(this, getString(org.fossify.commons.R.string.share_via)))
+                } catch (e: ActivityNotFoundException) {
+                    toast(org.fossify.commons.R.string.no_app_found)
+                } catch (e: RuntimeException) {
+                    if (e.cause is TransactionTooLargeException) {
+                        toast(org.fossify.commons.R.string.maximum_share_reached)
+                    } else {
+                        showErrorToast(e)
+                    }
+                } catch (e: Exception) {
+                    showErrorToast(e)
+                }
+            }
+        } else {
+            val uriPaths = uris.map { it.path!! }
+            var mimeType = uriPaths.getMimeType()
+            if (mimeType.isEmpty() || mimeType == "*/*") {
+                mimeType = paths.getMimeType()
+            }
+
+            Intent().apply {
+                action = Intent.ACTION_SEND_MULTIPLE
+                type = mimeType.normalizeMimeTypeForSharing()
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+
+                try {
+                    startActivity(Intent.createChooser(this, getString(org.fossify.commons.R.string.share_via)))
+                } catch (e: ActivityNotFoundException) {
+                    toast(org.fossify.commons.R.string.no_app_found)
+                } catch (e: RuntimeException) {
+                    if (e.cause is TransactionTooLargeException) {
+                        toast(org.fossify.commons.R.string.maximum_share_reached)
+                    } else {
+                        showErrorToast(e)
+                    }
+                } catch (e: Exception) {
+                    showErrorToast(e)
+                }
+            }
+        }
+    }
 }
 
 fun Activity.shareMediumPath(path: String) {
