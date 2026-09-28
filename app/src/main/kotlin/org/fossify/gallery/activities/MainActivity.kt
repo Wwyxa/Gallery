@@ -67,7 +67,6 @@ import org.fossify.commons.helpers.SORT_BY_DATE_MODIFIED
 import org.fossify.commons.helpers.SORT_BY_DATE_TAKEN
 import org.fossify.commons.helpers.SORT_BY_SIZE
 import org.fossify.commons.helpers.SORT_USE_NUMERIC_VALUE
-import org.fossify.commons.helpers.VIEW_TYPE_GRID
 import org.fossify.commons.helpers.VIEW_TYPE_LIST
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.helpers.isRPlus
@@ -137,6 +136,7 @@ import org.fossify.gallery.helpers.TYPE_IMAGES
 import org.fossify.gallery.helpers.TYPE_RAWS
 import org.fossify.gallery.helpers.TYPE_SVGS
 import org.fossify.gallery.helpers.TYPE_VIDEOS
+import org.fossify.gallery.helpers.VIEW_TYPE_FOLDER_GRID
 import org.fossify.gallery.helpers.getDefaultFileFilter
 import org.fossify.gallery.helpers.getPermissionToRequest
 import org.fossify.gallery.helpers.getPermissionsToRequest
@@ -450,7 +450,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     private fun refreshMenuItems() {
         if (!mIsThirdPartyIntent) {
             binding.mainMenu.requireToolbar().menu.apply {
-                findItem(R.id.column_count).isVisible = config.viewTypeFolders == VIEW_TYPE_GRID
+                findItem(R.id.column_count).isVisible = config.viewTypeFolders != VIEW_TYPE_LIST
                 findItem(R.id.set_as_default_folder).isVisible = !config.defaultFolder.isEmpty()
                 findItem(R.id.open_recycle_bin).isVisible =
                     config.useRecycleBin && !config.showRecycleBinAtFolders
@@ -835,7 +835,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     }
 
     private fun setupLayoutManager() {
-        if (config.viewTypeFolders == VIEW_TYPE_GRID) {
+        if (config.viewTypeFolders != VIEW_TYPE_LIST) {
             setupGridLayoutManager()
         } else {
             setupListLayoutManager()
@@ -878,7 +878,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     }
 
     private fun initZoomListener() {
-        if (config.viewTypeFolders == VIEW_TYPE_GRID) {
+        if (config.viewTypeFolders != VIEW_TYPE_LIST) {
             val layoutManager = binding.directoriesGrid.layoutManager as MyGridLayoutManager
             mZoomListener = object : MyRecyclerView.MyZoomListener {
                 override fun zoomIn() {
@@ -1542,7 +1542,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
 
     private fun setupScrollDirection() {
         val scrollHorizontally =
-            config.scrollHorizontally && config.viewTypeFolders == VIEW_TYPE_GRID
+            config.scrollHorizontally && config.viewTypeFolders != VIEW_TYPE_LIST
         binding.directoriesFastscroller.setScrollVertically(!scrollHorizontally)
     }
 

@@ -112,7 +112,7 @@ class ChangeFolderThumbnailStyleDialog(val activity: BaseSimpleActivity, val cal
                 sampleBinding.photoCnt.setTextColor(activity.getProperTextColor())
             }
 
-            builder.into(sampleBinding.dirThumbnail)
+            builder.into(sampleBinding.dirThumbnails.first())
         }
     }
 

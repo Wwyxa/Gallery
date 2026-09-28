@@ -264,6 +264,8 @@
     <!-- View types -->
     <string name="waterfall">Waterfall</string>
     <string name="mosaic">Mosaic</string>
+    <string name="large_thumbnails">Large thumbnails</string>
+    <string name="folder_grid">Grid</string>
 
     <!-- FAQ -->
     <string name="faq_1_title">How can I make Fossify Gallery the default device gallery?</string>

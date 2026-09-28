@@ -22,7 +22,7 @@ import org.fossify.commons.extensions.isInDownloadDir
 import org.fossify.commons.extensions.isRestrictedWithSAFSdk30
 import org.fossify.commons.extensions.setupDialogStuff
 import org.fossify.commons.extensions.toast
-import org.fossify.commons.helpers.VIEW_TYPE_GRID
+import org.fossify.commons.helpers.VIEW_TYPE_LIST
 import org.fossify.commons.views.MyGridLayoutManager
 import org.fossify.commons.views.MySearchMenu
 import org.fossify.gallery.R
@@ -50,7 +50,7 @@ class PickDirectoryDialog(
     private var allDirectories = ArrayList<Directory>()
     private var openedSubfolders = arrayListOf("")
     private var binding = DialogDirectoryPickerBinding.inflate(activity.layoutInflater)
-    private var isGridViewType = activity.config.viewTypeFolders == VIEW_TYPE_GRID
+    private var isGridViewType = activity.config.viewTypeFolders != VIEW_TYPE_LIST
     private var showHidden = activity.config.shouldShowHidden
     private var currentPathPrefix = ""
     private val config = activity.config
