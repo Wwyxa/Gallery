@@ -3,6 +3,9 @@ package org.fossify.gallery.helpers
 import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
+import android.graphics.BitmapFactory
+import android.graphics.Point
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -11,6 +14,7 @@ import android.provider.MediaStore
 import android.provider.MediaStore.Files
 import android.provider.MediaStore.Images
 import android.text.format.DateFormat
+import androidx.exifinterface.media.ExifInterface
 import org.fossify.commons.extensions.*
 import org.fossify.commons.helpers.*
 import org.fossify.gallery.R
@@ -303,6 +307,8 @@ class MediaFetcher(val context: Context) {
         val showHidden = config.shouldShowHidden
         val showPortraits = filterMedia and TYPE_PORTRAITS != 0
         val fileSizes = if (checkProperFileSize || checkFileExistence) getFolderSizes(folder) else HashMap()
+        val dimensions = if (isRatioBasedViewType(config.getFolderViewType(folder))) getFolderDimensions(folder) else HashMap()
+        val storedVideoDimensions = getStoredVideoDimensions()
 
         val files = when (folder) {
             FAVORITES -> favoritePaths.filter { showHidden || !it.contains("/.") }.map { File(it) }.toMutableList() as ArrayList<File>
@@ -416,8 +422,28 @@ class MediaFetcher(val context: Context) {
                     else -> TYPE_IMAGES
                 }
 
+                var width = 0
+                var height = 0
+                val storedDimension = dimensions.remove(path)
+                if (storedDimension != null) {
+                    width = storedDimension.x
+                    height = storedDimension.y
+                } else if (isImage || isGif || isRaw) {
+                    // the file is missing from MediaStore (e.g. it is in a hidden folder), parse its header directly
+                    val dimension = getImageDimensions(path)
+                    width = dimension.x
+                    height = dimension.y
+                } else if (isVideo) {
+                    val dimension = storedVideoDimensions[path] ?: getVideoDimensions(path)
+                    width = dimension.x
+                    height = dimension.y
+                }
+
                 val isFavorite = favoritePaths.contains(path)
-                val medium = Medium(null, filename, path, file.parent, lastModified, dateTaken, size, type, videoDuration, isFavorite, 0L, 0L)
+                val medium = Medium(
+                    null, filename, path, file.parent, lastModified, dateTaken, size, type, videoDuration, isFavorite,
+                    deletedTS = 0L, mediaStoreId = 0L, width = width, height = height
+                )
                 media.add(medium)
             }
         }
@@ -440,6 +466,7 @@ class MediaFetcher(val context: Context) {
 
         val filterMedia = context.config.filterMedia
         val showHidden = context.config.shouldShowHidden
+        val storedVideoDimensions = getStoredVideoDimensions()
 
         val projection = arrayOf(
             Images.Media._ID,
@@ -448,7 +475,10 @@ class MediaFetcher(val context: Context) {
             Images.Media.DATE_MODIFIED,
             Images.Media.DATE_TAKEN,
             Images.Media.SIZE,
-            MediaStore.MediaColumns.DURATION
+            MediaStore.MediaColumns.DURATION,
+            MediaStore.MediaColumns.WIDTH,
+            MediaStore.MediaColumns.HEIGHT,
+            Images.ImageColumns.ORIENTATION
         )
 
         val uri = Files.getContentUri("external")
@@ -521,9 +551,19 @@ class MediaFetcher(val context: Context) {
                 }
 
                 val videoDuration = Math.round(cursor.getIntValue(MediaStore.MediaColumns.DURATION) / 1000.toDouble()).toInt()
+                var dimension = getStoredDimension(cursor) ?: Point(0, 0)
+                if ((dimension.x <= 0 || dimension.y <= 0) && isVideo) {
+                    // MediaStore often leaves the video dimensions empty, use the ratio persisted by an
+                    // earlier fetch or read them from the file's metadata
+                    dimension = storedVideoDimensions[path] ?: getVideoDimensions(path)
+                }
+
                 val isFavorite = favoritePaths.contains(path)
                 val medium =
-                    Medium(null, filename, path, path.getParentPath(), lastModified, dateTaken, size, type, videoDuration, isFavorite, 0L, mediaStoreId)
+                    Medium(
+                        null, filename, path, path.getParentPath(), lastModified, dateTaken, size, type, videoDuration, isFavorite,
+                        deletedTS = 0L, mediaStoreId = mediaStoreId, width = dimension.x, height = dimension.y
+                    )
                 val parent = medium.parentPath.lowercase(Locale.getDefault())
                 val currentFolderMedia = media[parent]
                 if (currentFolderMedia == null) {
@@ -759,6 +799,108 @@ class MediaFetcher(val context: Context) {
         }
 
         return sizes
+    }
+
+    private fun getFolderDimensions(folder: String): HashMap<String, Point> {
+        val dimensions = HashMap<String, Point>()
+        if (folder == FAVORITES || folder == RECYCLE_BIN) {
+            return dimensions
+        }
+
+        val projection = arrayOf(
+            Images.Media.DATA,
+            Images.Media.WIDTH,
+            Images.Media.HEIGHT,
+            Images.ImageColumns.ORIENTATION
+        )
+
+        val uri = Files.getContentUri("external")
+        val selection = "${Images.Media.DATA} LIKE ? AND ${Images.Media.DATA} NOT LIKE ?"
+        val selectionArgs = arrayOf("$folder/%", "$folder/%/%")
+
+        context.queryCursor(uri, projection, selection, selectionArgs) { cursor ->
+            try {
+                val dimension = getStoredDimension(cursor)
+                if (dimension != null) {
+                    dimensions[cursor.getStringValue(Images.Media.DATA)] = dimension
+                }
+            } catch (ignored: Exception) {
+            }
+        }
+
+        return dimensions
+    }
+
+    private fun getStoredDimension(cursor: Cursor): Point? {
+        var width = cursor.getIntValue(Images.Media.WIDTH)
+        var height = cursor.getIntValue(Images.Media.HEIGHT)
+        if (width <= 0 || height <= 0) {
+            return null
+        }
+
+        val orientation = cursor.getIntValue(Images.ImageColumns.ORIENTATION)
+        if (orientation == 90 || orientation == 270) {
+            val tmp = width
+            width = height
+            height = tmp
+        }
+
+        return Point(width, height)
+    }
+
+    // fallback for files missing from MediaStore (e.g. in hidden folders), returns 0,0 if the file is not a decodable image
+    fun getImageDimensions(path: String): Point {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, options)
+        var width = options.outWidth
+        var height = options.outHeight
+        if (width > 0 && height > 0) {
+            try {
+                val orientation = ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+                if (orientation == ExifInterface.ORIENTATION_ROTATE_90 || orientation == ExifInterface.ORIENTATION_ROTATE_270 ||
+                    orientation == ExifInterface.ORIENTATION_TRANSPOSE || orientation == ExifInterface.ORIENTATION_TRANSVERSE
+                ) {
+                    val tmp = width
+                    width = height
+                    height = tmp
+                }
+            } catch (ignored: Exception) {
+            }
+        }
+
+        return Point(width, height)
+    }
+
+    // fallback for videos whose dimensions MediaStore left empty, returns 0,0 if the metadata is unreadable
+    private fun getVideoDimensions(path: String): Point {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(path)
+            var width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+            var height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+            val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+            if (rotation == 90 || rotation == 270) {
+                val tmp = width
+                width = height
+                height = tmp
+            }
+
+            if (width > 0 && height > 0) Point(width, height) else Point(0, 0)
+        } catch (ignored: Exception) {
+            Point(0, 0)
+        } finally {
+            retriever.release()
+        }
+    }
+
+    // aspect ratios persisted by an earlier fetch, they must not be read from the files again
+    private fun getStoredVideoDimensions(): HashMap<String, Point> {
+        return try {
+            context.mediaDB.getMediumDimensions(TYPE_VIDEOS)
+                .associateTo(HashMap()) { it.path to Point(it.width, it.height) }
+        } catch (ignored: Exception) {
+            HashMap()
+        }
     }
 
     fun sortMedia(media: ArrayList<Medium>, sorting: Int) {

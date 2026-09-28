@@ -31,6 +31,18 @@
                 android:layout_height="wrap_content"
                 android:text="@string/list" />
 
+            <org.fossify.commons.views.MyCompatRadioButton
+                android:id="@+id/change_view_type_dialog_radio_waterfall"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/waterfall" />
+
+            <org.fossify.commons.views.MyCompatRadioButton
+                android:id="@+id/change_view_type_dialog_radio_mosaic"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mosaic" />
+
         </RadioGroup>
 
         <include

@@ -261,6 +261,10 @@
     <!-- Player-->
     <string name="video_no_sound">This video has no audio</string>
 
+    <!-- View types -->
+    <string name="waterfall">Waterfall</string>
+    <string name="mosaic">Mosaic</string>
+
     <!-- FAQ -->
     <string name="faq_1_title">How can I make Fossify Gallery the default device gallery?</string>
     <string name="faq_1_text">First you have to find the currently default gallery in the Apps section of your device settings, look for a button that says something like \"Open by default\", click on it, then select \"Clear defaults\".

@@ -3,6 +3,7 @@ package org.fossify.gallery.adapters
 import android.content.Intent
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
+import android.graphics.Point
 import android.graphics.drawable.Icon
 import android.view.Menu
 import android.view.View
@@ -11,6 +12,7 @@ import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.view.allViews
+import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.bumptech.glide.Glide
 import com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
 import org.fossify.commons.activities.BaseSimpleActivity
@@ -53,9 +55,11 @@ import org.fossify.gallery.R
 import org.fossify.gallery.activities.ViewPagerActivity
 import org.fossify.gallery.databinding.PhotoItemGridBinding
 import org.fossify.gallery.databinding.PhotoItemListBinding
+import org.fossify.gallery.databinding.PhotoItemWaterfallBinding
 import org.fossify.gallery.databinding.ThumbnailSectionBinding
 import org.fossify.gallery.databinding.VideoItemGridBinding
 import org.fossify.gallery.databinding.VideoItemListBinding
+import org.fossify.gallery.databinding.VideoItemWaterfallBinding
 import org.fossify.gallery.dialogs.DeleteWithRememberDialog
 import org.fossify.gallery.extensions.config
 import org.fossify.gallery.extensions.fixDateTaken
@@ -78,6 +82,10 @@ import org.fossify.gallery.extensions.tryCopyMoveFilesTo
 import org.fossify.gallery.extensions.updateDBMediaPath
 import org.fossify.gallery.extensions.updateFavorite
 import org.fossify.gallery.extensions.updateFavoritePaths
+import org.fossify.gallery.helpers.MAX_WATERFALL_RATIO
+import org.fossify.gallery.helpers.MIN_WATERFALL_RATIO
+import org.fossify.gallery.helpers.MOSAIC_MAX_ROW_STRETCH
+import org.fossify.gallery.helpers.MOSAIC_TOTAL_SPANS
 import org.fossify.gallery.helpers.PATH
 import org.fossify.gallery.helpers.RECYCLE_BIN
 import org.fossify.gallery.helpers.ROUNDED_CORNERS_BIG
@@ -88,6 +96,8 @@ import org.fossify.gallery.helpers.SHOW_FAVORITES
 import org.fossify.gallery.helpers.SHOW_RECYCLE_BIN
 import org.fossify.gallery.helpers.TYPE_GIFS
 import org.fossify.gallery.helpers.TYPE_RAWS
+import org.fossify.gallery.helpers.VIEW_TYPE_MOSAIC
+import org.fossify.gallery.helpers.VIEW_TYPE_WATERFALL
 import org.fossify.gallery.interfaces.MediaOperationsListener
 import org.fossify.gallery.models.Medium
 import org.fossify.gallery.models.ThumbnailItem
@@ -101,6 +111,7 @@ class MediaAdapter(
     val allowMultiplePicks: Boolean,
     val path: String,
     recyclerView: MyRecyclerView,
+    val forceGridViewType: Boolean = false,
     itemClick: (Any) -> Unit
 ) : MyRecyclerViewAdapter(activity, recyclerView, itemClick),
     RecyclerViewFastScroller.OnPopupTextUpdate {
@@ -111,7 +122,15 @@ class MediaAdapter(
 
     private val config = activity.config
     private val viewType = config.getFolderViewType(if (config.showAll) SHOW_ALL else path)
-    private val isListViewType = viewType == VIEW_TYPE_LIST
+    private val isListViewType = !forceGridViewType && viewType == VIEW_TYPE_LIST
+    private val isWaterfallView = !forceGridViewType && viewType == VIEW_TYPE_WATERFALL
+    private val isMosaicView = !forceGridViewType && viewType == VIEW_TYPE_MOSAIC
+    private val isRatioBasedView = isWaterfallView || isMosaicView
+
+    // per position aspect ratio based layout data, used by the mosaic view type
+    private var mosaicSpanSizes = IntArray(0)
+    private var mosaicRowHeights = FloatArray(0)
+
     private var rotatedImagePaths = ArrayList<String>()
     private var currentMediaHash = media.hashCode()
     private val hasOTGConnected = activity.hasOTGConnected()
@@ -128,6 +147,7 @@ class MediaAdapter(
 
     init {
         setupDragListener(true)
+        setupMosaicLayoutData()
     }
 
     override fun getActionMenuId() = R.menu.cab_media
@@ -136,20 +156,39 @@ class MediaAdapter(
         val binding = if (viewType == ITEM_SECTION) {
             ThumbnailSectionBinding.inflate(layoutInflater, parent, false)
         } else {
-            if (isListViewType) {
-                if (viewType == ITEM_MEDIUM_PHOTO) {
-                    PhotoItemListBinding.inflate(layoutInflater, parent, false)
-                } else {
-                    VideoItemListBinding.inflate(layoutInflater, parent, false)
+            when {
+                isListViewType -> {
+                    if (viewType == ITEM_MEDIUM_PHOTO) {
+                        PhotoItemListBinding.inflate(layoutInflater, parent, false)
+                    } else {
+                        VideoItemListBinding.inflate(layoutInflater, parent, false)
+                    }
                 }
-            } else {
-                if (viewType == ITEM_MEDIUM_PHOTO) {
-                    PhotoItemGridBinding.inflate(layoutInflater, parent, false)
-                } else {
-                    VideoItemGridBinding.inflate(layoutInflater, parent, false)
+
+                isRatioBasedView -> {
+                    if (viewType == ITEM_MEDIUM_PHOTO) {
+                        PhotoItemWaterfallBinding.inflate(layoutInflater, parent, false)
+                    } else {
+                        VideoItemWaterfallBinding.inflate(layoutInflater, parent, false)
+                    }
+                }
+
+                else -> {
+                    if (viewType == ITEM_MEDIUM_PHOTO) {
+                        PhotoItemGridBinding.inflate(layoutInflater, parent, false)
+                    } else {
+                        VideoItemGridBinding.inflate(layoutInflater, parent, false)
+                    }
                 }
             }
         }
+
+        if (isWaterfallView && viewType == ITEM_SECTION) {
+            binding.root.layoutParams = StaggeredGridLayoutManager.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { isFullSpan = true }
+        }
+
         return createViewHolder(binding.root)
     }
 
@@ -158,7 +197,7 @@ class MediaAdapter(
         val allowLongPress = (!isAGetIntent || allowMultiplePicks) && tmbItem is Medium
         holder.bindView(tmbItem, tmbItem is Medium, allowLongPress) { itemView, adapterPosition ->
             if (tmbItem is Medium) {
-                setupThumbnail(itemView, tmbItem)
+                setupThumbnail(itemView, tmbItem, adapterPosition)
             } else {
                 setupSection(itemView, tmbItem as ThumbnailSection)
             }
@@ -611,6 +650,7 @@ class MediaAdapter(
                 media.removeAll(removeMedia)
                 listener?.tryDeleteFiles(fileDirItems, skipRecycleBin)
                 listener?.updateMediaGridDecoration(media)
+                setupMosaicLayoutData()
                 removeSelectedItems(positions)
                 currentMediaHash = media.hashCode()
             }
@@ -630,6 +670,7 @@ class MediaAdapter(
         if (thumbnailItems.hashCode() != currentMediaHash) {
             currentMediaHash = thumbnailItems.hashCode()
             media = thumbnailItems
+            setupMosaicLayoutData()
             notifyDataSetChanged()
             finishActMode()
         }
@@ -655,16 +696,24 @@ class MediaAdapter(
         notifyDataSetChanged()
     }
 
-    private fun setupThumbnail(view: View, medium: Medium) {
+    private fun setupThumbnail(view: View, medium: Medium, position: Int) {
         val isSelected = selectedKeys.contains(medium.path.hashCode())
+        var overrideSize: Point? = null
         bindItem(view, medium).apply {
-            val padding = if (config.thumbnailSpacing <= 1) {
-                config.thumbnailSpacing
+            if (isRatioBasedView) {
+                val halfSpacing = config.thumbnailSpacing / 2
+                mediaItemHolder.setPadding(halfSpacing, halfSpacing, halfSpacing, halfSpacing)
+                val size = getRatioBasedItemSize(medium, position, halfSpacing)
+                view.layoutParams?.height = size.y + halfSpacing * 2
+                overrideSize = size.takeIf { it.x > 0 && it.y > 0 }
             } else {
-                0
+                val padding = if (config.thumbnailSpacing <= 1) {
+                    config.thumbnailSpacing
+                } else {
+                    0
+                }
+                mediaItemHolder.setPadding(padding, padding, padding, padding)
             }
-
-            mediaItemHolder.setPadding(padding, padding, padding, padding)
 
             favorite.beVisibleIf(medium.isFavorite && config.markFavoriteItems)
 
@@ -744,10 +793,13 @@ class MediaAdapter(
                 target = mediumThumbnail,
                 horizontalScroll = scrollHorizontally,
                 animateGifs = animateGifs,
-                cropThumbnails = cropThumbnails,
+                // ratio based views size the thumbnail box from the real aspect ratio, cropping must be always on
+                cropThumbnails = cropThumbnails || isRatioBasedView,
                 roundCorners = roundedCorners,
                 signature = medium.getKey(),
                 skipMemoryCacheAtPaths = rotatedImagePaths,
+                // recycled views still measure themselves with the previous item's size, force the exact box size
+                overrideSize = overrideSize,
                 onError = {
                     mediumThumbnail.scaleType = ImageView.ScaleType.CENTER
                     mediumThumbnail.setImageDrawable(AppCompatResources.getDrawable(activity, R.drawable.ic_vector_warning_colored))
@@ -768,6 +820,115 @@ class MediaAdapter(
         }
     }
 
+    // the exact pixel size of the thumbnail box, waterfall items use the column width scaled by the aspect ratio,
+    // mosaic items share the height of their row and take a width proportional to their aspect ratio
+    private fun getRatioBasedItemSize(medium: Medium, position: Int, halfSpacing: Int): Point {
+        val spacing = halfSpacing * 2
+        val width = getUsableWidth()
+        return if (isWaterfallView) {
+            val spanCount = (recyclerView.layoutManager as? StaggeredGridLayoutManager)?.spanCount ?: config.mediaColumnCnt
+            val thumbnailWidth = width / spanCount.toFloat() - spacing
+            val ratio = medium.getRatio().coerceIn(MIN_WATERFALL_RATIO, MAX_WATERFALL_RATIO)
+            Point(Math.round(thumbnailWidth), Math.round(thumbnailWidth / ratio))
+        } else {
+            val rowHeightFraction = mosaicRowHeights.getOrNull(position) ?: 0f
+            val spanSize = mosaicSpanSizes.getOrNull(position) ?: MOSAIC_TOTAL_SPANS
+            val thumbnailWidth = Math.round(width.toFloat() * spanSize / MOSAIC_TOTAL_SPANS) - spacing
+            Point(thumbnailWidth.coerceAtLeast(1), Math.round(width * rowHeightFraction))
+        }
+    }
+
+    private fun getUsableWidth(): Int {
+        val recyclerViewWidth = recyclerView.width
+        return if (recyclerViewWidth > 0) recyclerViewWidth else recyclerView.resources.displayMetrics.widthPixels
+    }
+
+    fun getMosaicSpanSize(position: Int) = mosaicSpanSizes.getOrNull(position)?.takeIf { it > 0 } ?: MOSAIC_TOTAL_SPANS
+
+    fun updateMosaicLayout() {
+        if (isMosaicView) {
+            setupMosaicLayoutData()
+            notifyDataSetChanged()
+        }
+    }
+
+    // split the media into justified rows the f-stop river way: a row takes items while its combined
+    // aspect ratios stay within the target (and always at least a few items), then the row spans the
+    // whole width, every item gets a width proportional to its ratio and the row shares a uniform height
+    private fun setupMosaicLayoutData() {
+        val itemCount = media.size
+        val spanSizes = IntArray(itemCount)
+        val rowHeights = FloatArray(itemCount)
+        if (isMosaicView) {
+            val targetRowRatioSum = config.mediaColumnCnt.coerceAtLeast(1).toFloat()
+            // a row always takes at least a few items, so a lone wide shot still gets paired with
+            // the following portraits instead of owning a whole row
+            val minRowItems = minOf(3, config.mediaColumnCnt.coerceAtLeast(1))
+            val clampedRatios = media.map { (it as? Medium)?.getRatio()?.coerceIn(MIN_WATERFALL_RATIO, MAX_WATERFALL_RATIO) ?: 1f }
+
+            var position = 0
+            while (position < itemCount) {
+                if (media[position] !is Medium) {
+                    spanSizes[position] = MOSAIC_TOTAL_SPANS
+                    position++
+                    continue
+                }
+
+                var rowEnd = position
+                var rowRatioSum = 0f
+                while (rowEnd < itemCount && media[rowEnd] is Medium) {
+                    val ratio = clampedRatios[rowEnd]
+                    // a row keeps taking items while its combined ratios stay within the target and
+                    // always at least minRowItems of them - the row heights then come out naturally
+                    // tall like in f-stop's river view instead of being forced uniform
+                    if (rowEnd - position >= minRowItems && rowRatioSum + ratio > targetRowRatioSum) {
+                        break
+                    }
+                    rowRatioSum += ratio
+                    rowEnd++
+                }
+
+                // every row fills the whole width and its height follows from the combined ratios; a
+                // partial row (end of a section or the list) only stretches taller up to a limit, the
+                // rest is absorbed by the same slight crop that the uniform row height already applies
+                val rowHeightFraction = minOf(1f / rowRatioSum, MOSAIC_MAX_ROW_STRETCH / targetRowRatioSum)
+                val rowTotalSpans = MOSAIC_TOTAL_SPANS
+
+                val spans = IntArray(rowEnd - position)
+                val remainders = ArrayList<Pair<Int, Float>>(spans.size)
+                var usedSpans = 0
+                for (i in position until rowEnd) {
+                    val exact = clampedRatios[i] / rowRatioSum * MOSAIC_TOTAL_SPANS
+                    spans[i - position] = exact.toInt()
+                    usedSpans += spans[i - position]
+                    remainders.add(i - position to exact - spans[i - position])
+                }
+
+                remainders.sortByDescending { it.second }
+                var leftover = rowTotalSpans - usedSpans
+                var remainderIndex = 0
+                while (leftover > 0) {
+                    spans[remainders[remainderIndex % remainders.size].first]++
+                    leftover--
+                    remainderIndex++
+                }
+                while (leftover < 0) {
+                    spans[remainders.minByOrNull { it.second }!!.first]--
+                    leftover++
+                }
+
+                for (i in position until rowEnd) {
+                    spanSizes[i] = spans[i - position].coerceAtLeast(1)
+                    rowHeights[i] = rowHeightFraction
+                }
+                position = rowEnd
+            }
+        }
+
+        mosaicSpanSizes = spanSizes
+        mosaicRowHeights = rowHeights
+    }
+
     override fun onChange(position: Int): String {
         var realIndex = position
         if (isASectionTitle(position)) {
@@ -778,17 +939,29 @@ class MediaAdapter(
     }
 
     private fun bindItem(view: View, medium: Medium): MediaItemBinding {
-        return if (isListViewType) {
-            if (!medium.isVideo() && !medium.isPortrait()) {
-                PhotoItemListBinding.bind(view).toMediaItemBinding()
-            } else {
-                VideoItemListBinding.bind(view).toMediaItemBinding()
+        return when {
+            isListViewType -> {
+                if (!medium.isVideo() && !medium.isPortrait()) {
+                    PhotoItemListBinding.bind(view).toMediaItemBinding()
+                } else {
+                    VideoItemListBinding.bind(view).toMediaItemBinding()
+                }
             }
-        } else {
-            if (!medium.isVideo() && !medium.isPortrait()) {
-                PhotoItemGridBinding.bind(view).toMediaItemBinding()
-            } else {
-                VideoItemGridBinding.bind(view).toMediaItemBinding()
+
+            isRatioBasedView -> {
+                if (!medium.isVideo() && !medium.isPortrait()) {
+                    PhotoItemWaterfallBinding.bind(view).toMediaItemBinding()
+                } else {
+                    VideoItemWaterfallBinding.bind(view).toMediaItemBinding()
+                }
+            }
+
+            else -> {
+                if (!medium.isVideo() && !medium.isPortrait()) {
+                    PhotoItemGridBinding.bind(view).toMediaItemBinding()
+                } else {
+                    VideoItemGridBinding.bind(view).toMediaItemBinding()
+                }
             }
         }
     }

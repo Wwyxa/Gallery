@@ -6,8 +6,10 @@ import android.widget.TextView
 import org.fossify.commons.views.MySquareImageView
 import org.fossify.gallery.databinding.PhotoItemGridBinding
 import org.fossify.gallery.databinding.PhotoItemListBinding
+import org.fossify.gallery.databinding.PhotoItemWaterfallBinding
 import org.fossify.gallery.databinding.VideoItemGridBinding
 import org.fossify.gallery.databinding.VideoItemListBinding
+import org.fossify.gallery.databinding.VideoItemWaterfallBinding
 
 interface MediaItemBinding {
     val root: ViewGroup
@@ -18,7 +20,7 @@ interface MediaItemBinding {
     val mediumName: TextView
     val videoDuration: TextView?
     val mediumCheck: ImageView
-    val mediumThumbnail: MySquareImageView
+    val mediumThumbnail: ImageView
 }
 
 class PhotoListMediaItemBinding(val binding: PhotoItemListBinding) : MediaItemBinding {
@@ -76,3 +78,32 @@ class VideoGridMediaItemBinding(val binding: VideoItemGridBinding) : MediaItemBi
 }
 
 fun VideoItemGridBinding.toMediaItemBinding() = VideoGridMediaItemBinding(this)
+
+// used by both the waterfall and mosaic view types, the item height is set programmatically from the aspect ratio
+class PhotoWaterfallMediaItemBinding(val binding: PhotoItemWaterfallBinding) : MediaItemBinding {
+    override val root: ViewGroup = binding.root
+    override val mediaItemHolder: ViewGroup = binding.mediaItemHolder
+    override val favorite: ImageView = binding.favorite
+    override val playPortraitOutline: ImageView? = null
+    override val fileType: TextView = binding.fileType
+    override val mediumName: TextView = binding.mediumName
+    override val videoDuration: TextView? = null
+    override val mediumCheck: ImageView = binding.mediumCheck
+    override val mediumThumbnail: ImageView = binding.mediumThumbnail
+}
+
+fun PhotoItemWaterfallBinding.toMediaItemBinding() = PhotoWaterfallMediaItemBinding(this)
+
+class VideoWaterfallMediaItemBinding(val binding: VideoItemWaterfallBinding) : MediaItemBinding {
+    override val root: ViewGroup = binding.root
+    override val mediaItemHolder: ViewGroup = binding.mediaItemHolder
+    override val favorite: ImageView = binding.favorite
+    override val playPortraitOutline: ImageView = binding.playPortraitOutline
+    override val fileType: TextView? = null
+    override val mediumName: TextView = binding.mediumName
+    override val videoDuration: TextView = binding.videoDuration
+    override val mediumCheck: ImageView = binding.mediumCheck
+    override val mediumThumbnail: ImageView = binding.mediumThumbnail
+}
+
+fun VideoItemWaterfallBinding.toMediaItemBinding() = VideoWaterfallMediaItemBinding(this)

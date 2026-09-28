@@ -133,6 +133,12 @@ const val SHOW_PREV_ITEM = "show_prev_item"
 const val GO_TO_NEXT_ITEM = "go_to_next_item"
 const val GO_TO_PREV_ITEM = "go_to_prev_item"
 const val MAX_COLUMN_COUNT = 20
+const val VIEW_TYPE_WATERFALL = 4
+const val VIEW_TYPE_MOSAIC = 5
+const val MOSAIC_TOTAL_SPANS = 1000
+const val MOSAIC_MAX_ROW_STRETCH = 2.5f
+const val MIN_WATERFALL_RATIO = 1f / 3f
+const val MAX_WATERFALL_RATIO = 3f
 const val SHOW_TEMP_HIDDEN_DURATION = 300000L
 const val CLICK_MAX_DURATION = 150
 const val CLICK_MAX_DISTANCE = 100
@@ -264,6 +270,8 @@ const val FOLDER_STYLE_ROUNDED_CORNERS = 2
 const val THUMBNAIL_FADE_DURATION_MS = 150
 
 fun getPermissionToRequest() = if (isTiramisuPlus()) PERMISSION_READ_MEDIA_IMAGES else PERMISSION_WRITE_STORAGE
+
+fun isRatioBasedViewType(viewType: Int) = viewType == VIEW_TYPE_WATERFALL || viewType == VIEW_TYPE_MOSAIC
 
 fun getPermissionsToRequest(): Collection<Int> {
     val permissions = mutableListOf(getPermissionToRequest())

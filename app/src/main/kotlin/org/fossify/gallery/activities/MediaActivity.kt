@@ -10,6 +10,7 @@ import android.widget.RelativeLayout
 import androidx.core.net.toUri
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.RequestOptions
 import com.bumptech.glide.request.target.SimpleTarget
@@ -85,6 +86,7 @@ import org.fossify.gallery.extensions.restoreRecycleBinPaths
 import org.fossify.gallery.extensions.showRecycleBinEmptyingDialog
 import org.fossify.gallery.extensions.showRestoreConfirmationDialog
 import org.fossify.gallery.extensions.tryDeleteFileDirItem
+import org.fossify.gallery.extensions.updateWaterfallCompat
 import org.fossify.gallery.extensions.updateWidgets
 import org.fossify.gallery.helpers.DIRECTORY
 import org.fossify.gallery.helpers.GET_ANY_INTENT
@@ -93,6 +95,7 @@ import org.fossify.gallery.helpers.GET_VIDEO_INTENT
 import org.fossify.gallery.helpers.GridSpacingItemDecoration
 import org.fossify.gallery.helpers.IS_IN_RECYCLE_BIN
 import org.fossify.gallery.helpers.MAX_COLUMN_COUNT
+import org.fossify.gallery.helpers.MOSAIC_TOTAL_SPANS
 import org.fossify.gallery.helpers.MediaFetcher
 import org.fossify.gallery.helpers.PATH
 import org.fossify.gallery.helpers.PICKED_PATHS
@@ -106,6 +109,8 @@ import org.fossify.gallery.helpers.SKIP_AUTHENTICATION
 import org.fossify.gallery.helpers.SLIDESHOW_START_ON_ENTER
 import org.fossify.gallery.helpers.VIDEO_PLAYER_APP
 import org.fossify.gallery.helpers.VIDEO_PLAYER_SYSTEM
+import org.fossify.gallery.helpers.VIEW_TYPE_MOSAIC
+import org.fossify.gallery.helpers.VIEW_TYPE_WATERFALL
 import org.fossify.gallery.interfaces.MediaOperationsListener
 import org.fossify.gallery.models.Medium
 import org.fossify.gallery.models.ThumbnailItem
@@ -354,8 +359,8 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             findItem(R.id.unset_as_default_folder).isVisible = isDefaultFolder
 
             val viewType = config.getFolderViewType(if (mShowAll) SHOW_ALL else mPath)
-            findItem(R.id.column_count).isVisible = viewType == VIEW_TYPE_GRID
-            findItem(R.id.toggle_filename).isVisible = viewType == VIEW_TYPE_GRID
+            findItem(R.id.column_count).isVisible = viewType != VIEW_TYPE_LIST
+            findItem(R.id.toggle_filename).isVisible = viewType != VIEW_TYPE_LIST
         }
     }
 
@@ -781,15 +786,20 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
 
     private fun setupLayoutManager() {
         val viewType = config.getFolderViewType(if (mShowAll) SHOW_ALL else mPath)
-        if (viewType == VIEW_TYPE_GRID) {
-            setupGridLayoutManager()
-        } else {
-            setupListLayoutManager()
+        when (viewType) {
+            VIEW_TYPE_GRID -> setupGridLayoutManager()
+            VIEW_TYPE_WATERFALL -> setupWaterfallLayoutManager()
+            VIEW_TYPE_MOSAIC -> setupMosaicLayoutManager()
+            else -> setupListLayoutManager()
         }
+
+        // the fastscroller crashes on the staggered grid, it is neutralized in the waterfall view
+        binding.mediaFastscroller.updateWaterfallCompat(binding.mediaGrid, viewType == VIEW_TYPE_WATERFALL)
     }
 
     private fun setupGridLayoutManager() {
-        val layoutManager = binding.mediaGrid.layoutManager as MyGridLayoutManager
+        val layoutManager = (binding.mediaGrid.layoutManager as? MyGridLayoutManager)
+            ?: MyGridLayoutManager(this, 1).also { binding.mediaGrid.layoutManager = it }
         if (config.scrollHorizontally) {
             layoutManager.orientation = RecyclerView.HORIZONTAL
             binding.mediaRefreshLayout.layoutParams = RelativeLayout.LayoutParams(
@@ -818,7 +828,8 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     }
 
     private fun setupListLayoutManager() {
-        val layoutManager = binding.mediaGrid.layoutManager as MyGridLayoutManager
+        val layoutManager = (binding.mediaGrid.layoutManager as? MyGridLayoutManager)
+            ?: MyGridLayoutManager(this, 1).also { binding.mediaGrid.layoutManager = it }
         layoutManager.spanCount = 1
         layoutManager.orientation = RecyclerView.VERTICAL
         binding.mediaRefreshLayout.layoutParams = RelativeLayout.LayoutParams(
@@ -826,6 +837,39 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             ViewGroup.LayoutParams.WRAP_CONTENT
         )
         mZoomListener = null
+    }
+
+    private fun setupWaterfallLayoutManager() {
+        val layoutManager = (binding.mediaGrid.layoutManager as? StaggeredGridLayoutManager)
+            ?: StaggeredGridLayoutManager(config.mediaColumnCnt, RecyclerView.VERTICAL).also {
+                binding.mediaGrid.layoutManager = it
+            }
+        layoutManager.orientation = RecyclerView.VERTICAL
+        layoutManager.spanCount = config.mediaColumnCnt
+        binding.mediaRefreshLayout.layoutParams = RelativeLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+    }
+
+    private fun setupMosaicLayoutManager() {
+        val layoutManager = (binding.mediaGrid.layoutManager as? MyGridLayoutManager)
+            ?: MyGridLayoutManager(this, MOSAIC_TOTAL_SPANS).also { binding.mediaGrid.layoutManager = it }
+        layoutManager.orientation = RecyclerView.VERTICAL
+        layoutManager.spanCount = MOSAIC_TOTAL_SPANS
+        binding.mediaRefreshLayout.layoutParams = RelativeLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        val adapter = getMediaAdapter()
+        layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int): Int {
+                return adapter?.getMosaicSpanSize(position) ?: MOSAIC_TOTAL_SPANS
+            }
+        }.apply {
+            // the spans change with the data and the column count, a stale index cache would break the rows
+            isSpanIndexCacheEnabled = false
+        }
     }
 
     private fun handleGridSpacing(media: ArrayList<ThumbnailItem> = mMedia) {
@@ -856,23 +900,32 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
                 }
                 binding.mediaGrid.addItemDecoration(newGridDecoration)
             }
+        } else {
+            // the waterfall and mosaic views handle spacing inside the item layouts
+            var index = binding.mediaGrid.itemDecorationCount - 1
+            while (index >= 0) {
+                val decoration = binding.mediaGrid.getItemDecorationAt(index)
+                if (decoration is GridSpacingItemDecoration) {
+                    binding.mediaGrid.removeItemDecoration(decoration)
+                }
+                index--
+            }
         }
     }
 
     private fun initZoomListener() {
         val viewType = config.getFolderViewType(if (mShowAll) SHOW_ALL else mPath)
-        if (viewType == VIEW_TYPE_GRID) {
-            val layoutManager = binding.mediaGrid.layoutManager as MyGridLayoutManager
+        if (viewType != VIEW_TYPE_LIST) {
             mZoomListener = object : MyRecyclerView.MyZoomListener {
                 override fun zoomIn() {
-                    if (layoutManager.spanCount > 1) {
+                    if (config.mediaColumnCnt > 1) {
                         reduceColumnCount()
                         getMediaAdapter()?.finishActMode()
                     }
                 }
 
                 override fun zoomOut() {
-                    if (layoutManager.spanCount < MAX_COLUMN_COUNT) {
+                    if (config.mediaColumnCnt < MAX_COLUMN_COUNT) {
                         increaseColumnCount()
                         getMediaAdapter()?.finishActMode()
                     }
@@ -896,7 +949,11 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             )
         }
 
-        val currentColumnCount = (binding.mediaGrid.layoutManager as MyGridLayoutManager).spanCount
+        val currentColumnCount = when (config.getFolderViewType(if (mShowAll) SHOW_ALL else mPath)) {
+            VIEW_TYPE_MOSAIC -> config.mediaColumnCnt
+            VIEW_TYPE_WATERFALL -> (binding.mediaGrid.layoutManager as StaggeredGridLayoutManager).spanCount
+            else -> (binding.mediaGrid.layoutManager as MyGridLayoutManager).spanCount
+        }
         RadioGroupDialog(this, items, currentColumnCount) {
             val newColumnCount = it as Int
             if (currentColumnCount != newColumnCount) {
@@ -917,11 +974,21 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     }
 
     private fun columnCountChanged() {
-        (binding.mediaGrid.layoutManager as MyGridLayoutManager).spanCount = config.mediaColumnCnt
+        val viewType = config.getFolderViewType(if (mShowAll) SHOW_ALL else mPath)
+        when (viewType) {
+            VIEW_TYPE_WATERFALL -> {
+                (binding.mediaGrid.layoutManager as StaggeredGridLayoutManager).spanCount = config.mediaColumnCnt
+            }
+
+            VIEW_TYPE_MOSAIC -> getMediaAdapter()?.updateMosaicLayout()
+            else -> (binding.mediaGrid.layoutManager as MyGridLayoutManager).spanCount = config.mediaColumnCnt
+        }
         handleGridSpacing()
         refreshMenuItems()
-        getMediaAdapter()?.apply {
-            notifyItemRangeChanged(0, media.size)
+        if (viewType != VIEW_TYPE_MOSAIC) {
+            getMediaAdapter()?.apply {
+                notifyItemRangeChanged(0, media.size)
+            }
         }
     }
 

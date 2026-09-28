@@ -8,6 +8,7 @@ import android.content.Intent
 import android.database.Cursor
 import android.graphics.Bitmap
 import android.graphics.Bitmap.CompressFormat
+import android.graphics.Point
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.PictureDrawable
 import android.media.AudioManager
@@ -603,16 +604,19 @@ fun Context.getFolderNameFromPath(path: String): String {
 fun Context.loadImage(
     type: Int,
     path: String,
-    target: MySquareImageView,
+    target: ImageView,
     horizontalScroll: Boolean,
     animateGifs: Boolean,
     cropThumbnails: Boolean,
     roundCorners: Int,
     signature: ObjectKey,
     skipMemoryCacheAtPaths: ArrayList<String>? = null,
+    overrideSize: Point? = null,
     onError: (() -> Unit)? = null
 ) {
-    target.isHorizontalScrolling = horizontalScroll
+    if (target is MySquareImageView) {
+        target.isHorizontalScrolling = horizontalScroll
+    }
     if (type == TYPE_SVGS) {
         loadSVG(
             path = path,
@@ -629,6 +633,7 @@ fun Context.loadImage(
             roundCorners = roundCorners,
             signature = signature,
             skipMemoryCacheAtPaths = skipMemoryCacheAtPaths,
+            overrideSize = overrideSize,
             animate = animateGifs,
             tryLoadingWithPicasso = type == TYPE_IMAGES && path.isPng(),
             onError = onError
@@ -672,11 +677,12 @@ fun Context.getPathLocation(path: String): Int {
 @SuppressLint("CheckResult")
 fun Context.loadImageBase(
     path: String,
-    target: MySquareImageView,
+    target: ImageView,
     cropThumbnails: Boolean,
     roundCorners: Int,
     signature: ObjectKey,
     skipMemoryCacheAtPaths: ArrayList<String>? = null,
+    overrideSize: Point? = null,
     animate: Boolean = false,
     tryLoadingWithPicasso: Boolean = false,
     crossFadeDuration: Int = THUMBNAIL_FADE_DURATION_MS,
@@ -688,6 +694,11 @@ fun Context.loadImageBase(
         .priority(Priority.LOW)
         .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
         .format(DecodeFormat.PREFER_ARGB_8888)
+
+    // recycled views can still report the previous item's size at bind time, the exact size must be forced
+    if (overrideSize != null) {
+        options.override(overrideSize.x, overrideSize.y)
+    }
 
     if (cropThumbnails) {
         options.optionalTransform(CenterCrop())
@@ -762,7 +773,7 @@ fun Context.loadImageBase(
 
 fun Context.loadSVG(
     path: String,
-    target: MySquareImageView,
+    target: ImageView,
     cropThumbnails: Boolean,
     roundCorners: Int,
     signature: ObjectKey,
@@ -798,7 +809,7 @@ fun Context.loadSVG(
 // intended mostly for Android 11 issues, that fail loading PNG files bigger than 10 MB
 fun Context.tryLoadingWithPicasso(
     path: String,
-    view: MySquareImageView,
+    view: ImageView,
     cropThumbnails: Boolean,
     roundCorners: Int,
     signature: ObjectKey
