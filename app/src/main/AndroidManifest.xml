@@ -298,6 +298,12 @@
                 android:resource="@xml/provider_paths" />
         </provider>
 
+        <provider
+            android:name="org.fossify.gallery.contentproviders.ShareFileProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <receiver
             android:name=".receivers.RefreshMediaReceiver"
             android:exported="true">
