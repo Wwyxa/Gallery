@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.RelativeLayout
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import org.fossify.commons.extensions.*
 import org.fossify.commons.helpers.VIEW_TYPE_GRID
 import org.fossify.commons.helpers.ensureBackgroundThread
@@ -17,11 +18,14 @@ import org.fossify.gallery.asynctasks.GetMediaAsynctask
 import org.fossify.gallery.databinding.ActivitySearchBinding
 import org.fossify.gallery.extensions.*
 import org.fossify.gallery.helpers.GridSpacingItemDecoration
+import org.fossify.gallery.helpers.MOSAIC_TOTAL_SPANS
 import org.fossify.gallery.helpers.MediaFetcher
 import org.fossify.gallery.helpers.PATH
 import org.fossify.gallery.helpers.SHOW_ALL
 import org.fossify.gallery.helpers.VIDEO_PLAYER_APP
 import org.fossify.gallery.helpers.VIDEO_PLAYER_SYSTEM
+import org.fossify.gallery.helpers.VIEW_TYPE_MOSAIC
+import org.fossify.gallery.helpers.VIEW_TYPE_WATERFALL
 import org.fossify.gallery.interfaces.MediaOperationsListener
 import org.fossify.gallery.models.Medium
 import org.fossify.gallery.models.ThumbnailItem
@@ -149,6 +153,16 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
             val spacing = config.thumbnailSpacing
             val decoration = GridSpacingItemDecoration(spanCount, spacing, config.scrollHorizontally, config.fileRoundedCorners, media, true)
             binding.searchGrid.addItemDecoration(decoration)
+        } else {
+            // the waterfall and mosaic views handle spacing inside the item layouts
+            var index = binding.searchGrid.itemDecorationCount - 1
+            while (index >= 0) {
+                val decoration = binding.searchGrid.getItemDecorationAt(index)
+                if (decoration is GridSpacingItemDecoration) {
+                    binding.searchGrid.removeItemDecoration(decoration)
+                }
+                index--
+            }
         }
     }
 
@@ -182,15 +196,20 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
 
     private fun setupLayoutManager() {
         val viewType = config.getFolderViewType(SHOW_ALL)
-        if (viewType == VIEW_TYPE_GRID) {
-            setupGridLayoutManager()
-        } else {
-            setupListLayoutManager()
+        when (viewType) {
+            VIEW_TYPE_GRID -> setupGridLayoutManager()
+            VIEW_TYPE_WATERFALL -> setupWaterfallLayoutManager()
+            VIEW_TYPE_MOSAIC -> setupMosaicLayoutManager()
+            else -> setupListLayoutManager()
         }
+
+        // the fastscroller crashes on the staggered grid, it is neutralized in the waterfall view
+        binding.searchFastscroller.updateWaterfallCompat(binding.searchGrid, viewType == VIEW_TYPE_WATERFALL)
     }
 
     private fun setupGridLayoutManager() {
-        val layoutManager = binding.searchGrid.layoutManager as MyGridLayoutManager
+        val layoutManager = (binding.searchGrid.layoutManager as? MyGridLayoutManager)
+            ?: MyGridLayoutManager(this, 1).also { binding.searchGrid.layoutManager = it }
         if (config.scrollHorizontally) {
             layoutManager.orientation = RecyclerView.HORIZONTAL
             binding.searchGrid.layoutParams = RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -213,9 +232,35 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
     }
 
     private fun setupListLayoutManager() {
-        val layoutManager = binding.searchGrid.layoutManager as MyGridLayoutManager
+        val layoutManager = (binding.searchGrid.layoutManager as? MyGridLayoutManager)
+            ?: MyGridLayoutManager(this, 1).also { binding.searchGrid.layoutManager = it }
         layoutManager.spanCount = 1
         layoutManager.orientation = RecyclerView.VERTICAL
+    }
+
+    private fun setupWaterfallLayoutManager() {
+        val layoutManager = (binding.searchGrid.layoutManager as? StaggeredGridLayoutManager)
+            ?: StaggeredGridLayoutManager(config.mediaColumnCnt, RecyclerView.VERTICAL).also {
+                binding.searchGrid.layoutManager = it
+            }
+        layoutManager.orientation = RecyclerView.VERTICAL
+        layoutManager.spanCount = config.mediaColumnCnt
+    }
+
+    private fun setupMosaicLayoutManager() {
+        val layoutManager = (binding.searchGrid.layoutManager as? MyGridLayoutManager)
+            ?: MyGridLayoutManager(this, MOSAIC_TOTAL_SPANS).also { binding.searchGrid.layoutManager = it }
+        layoutManager.orientation = RecyclerView.VERTICAL
+        layoutManager.spanCount = MOSAIC_TOTAL_SPANS
+        val adapter = getMediaAdapter()
+        layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+            override fun getSpanSize(position: Int): Int {
+                return adapter?.getMosaicSpanSize(position) ?: MOSAIC_TOTAL_SPANS
+            }
+        }.apply {
+            // the spans change with the data and the column count, a stale index cache would break the rows
+            isSpanIndexCacheEnabled = false
+        }
     }
 
     private fun setupScrollDirection() {

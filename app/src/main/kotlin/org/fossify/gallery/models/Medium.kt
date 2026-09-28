@@ -27,7 +27,9 @@ data class Medium(
     @ColumnInfo(name = "deleted_ts") var deletedTS: Long,
     @ColumnInfo(name = "media_store_id") var mediaStoreId: Long,
 
-    @Ignore var gridPosition: Int = 0   // used at grid view decoration at Grouping enabled
+    @Ignore var gridPosition: Int = 0,  // used at grid view decoration at Grouping enabled
+    @ColumnInfo(name = "width") var width: Int = 0,
+    @ColumnInfo(name = "height") var height: Int = 0
 ) : Serializable, ThumbnailItem() {
 
     constructor() : this(null, "", "", "", 0L, 0L, 0L, 0, 0, false, 0L, 0L, 0)
@@ -49,6 +51,12 @@ data class Medium(
     fun isSVG() = type == TYPE_SVGS
 
     fun isPortrait() = type == TYPE_PORTRAITS
+
+    fun getRatio() = if (width > 0 && height > 0) {
+        width.toFloat() / height
+    } else {
+        1f
+    }
 
     fun isApng() = name.isApng()
 
