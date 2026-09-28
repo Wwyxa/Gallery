@@ -7,9 +7,11 @@ import org.fossify.commons.extensions.getAlertDialogBuilder
 import org.fossify.commons.extensions.setupDialogStuff
 import org.fossify.commons.helpers.VIEW_TYPE_GRID
 import org.fossify.commons.helpers.VIEW_TYPE_LIST
+import org.fossify.gallery.R
 import org.fossify.gallery.databinding.DialogChangeViewTypeBinding
 import org.fossify.gallery.extensions.config
 import org.fossify.gallery.helpers.SHOW_ALL
+import org.fossify.gallery.helpers.VIEW_TYPE_FOLDER_GRID
 import org.fossify.gallery.helpers.VIEW_TYPE_MOSAIC
 import org.fossify.gallery.helpers.VIEW_TYPE_WATERFALL
 
@@ -24,6 +26,12 @@ class ChangeViewTypeDialog(val activity: BaseSimpleActivity, val fromFoldersView
             changeViewTypeDialogRadioWaterfall.beGoneIf(fromFoldersView)
             changeViewTypeDialogRadioMosaic.beGoneIf(fromFoldersView)
 
+            // the folder grid stitches four covers together and is only available for the folders view
+            changeViewTypeDialogRadioFolderGrid.beGoneIf(!fromFoldersView)
+            if (fromFoldersView) {
+                changeViewTypeDialogRadioGrid.setText(R.string.large_thumbnails)
+            }
+
             val currViewType = if (fromFoldersView) {
                 config.viewTypeFolders
             } else {
@@ -32,6 +40,7 @@ class ChangeViewTypeDialog(val activity: BaseSimpleActivity, val fromFoldersView
 
             val viewToCheck = when (currViewType) {
                 VIEW_TYPE_GRID -> changeViewTypeDialogRadioGrid.id
+                VIEW_TYPE_FOLDER_GRID -> changeViewTypeDialogRadioFolderGrid.id
                 VIEW_TYPE_WATERFALL -> changeViewTypeDialogRadioWaterfall.id
                 VIEW_TYPE_MOSAIC -> changeViewTypeDialogRadioMosaic.id
                 else -> changeViewTypeDialogRadioList.id
@@ -60,6 +69,7 @@ class ChangeViewTypeDialog(val activity: BaseSimpleActivity, val fromFoldersView
     private fun dialogConfirmed() {
         val viewType = when (binding.changeViewTypeDialogRadio.checkedRadioButtonId) {
             binding.changeViewTypeDialogRadioGrid.id -> VIEW_TYPE_GRID
+            binding.changeViewTypeDialogRadioFolderGrid.id -> VIEW_TYPE_FOLDER_GRID
             binding.changeViewTypeDialogRadioWaterfall.id -> VIEW_TYPE_WATERFALL
             binding.changeViewTypeDialogRadioMosaic.id -> VIEW_TYPE_MOSAIC
             else -> VIEW_TYPE_LIST
