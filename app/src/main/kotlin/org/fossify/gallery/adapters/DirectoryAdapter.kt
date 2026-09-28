@@ -67,6 +67,7 @@ import org.fossify.gallery.R
 import org.fossify.gallery.activities.MediaActivity
 import org.fossify.gallery.databinding.DirectoryItemGridRoundedCornersBinding
 import org.fossify.gallery.databinding.DirectoryItemGridSquareBinding
+import org.fossify.gallery.databinding.DirectoryItemGridTilesBinding
 import org.fossify.gallery.databinding.DirectoryItemListBinding
 import org.fossify.gallery.dialogs.ConfirmDeleteFolderDialog
 import org.fossify.gallery.dialogs.ExcludeFolderDialog
@@ -87,6 +88,7 @@ import org.fossify.gallery.extensions.removeNoMedia
 import org.fossify.gallery.extensions.showRecycleBinEmptyingDialog
 import org.fossify.gallery.extensions.tryCopyMoveFilesTo
 import org.fossify.gallery.helpers.DIRECTORY
+import org.fossify.gallery.helpers.FOLDER_GRID_COVER_COUNT
 import org.fossify.gallery.helpers.FOLDER_MEDIA_CNT_BRACKETS
 import org.fossify.gallery.helpers.FOLDER_MEDIA_CNT_LINE
 import org.fossify.gallery.helpers.FOLDER_STYLE_ROUNDED_CORNERS
@@ -103,11 +105,13 @@ import org.fossify.gallery.helpers.TYPE_IMAGES
 import org.fossify.gallery.helpers.TYPE_RAWS
 import org.fossify.gallery.helpers.TYPE_SVGS
 import org.fossify.gallery.helpers.TYPE_VIDEOS
+import org.fossify.gallery.helpers.VIEW_TYPE_FOLDER_GRID
 import org.fossify.gallery.interfaces.DirectoryOperationsListener
 import org.fossify.gallery.models.AlbumCover
 import org.fossify.gallery.models.Directory
 import java.io.File
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 class DirectoryAdapter(
     activity: BaseSimpleActivity,
@@ -123,6 +127,7 @@ class DirectoryAdapter(
 
     private val config = activity.config
     private val isListViewType = config.viewTypeFolders == VIEW_TYPE_LIST
+    private val isFolderGridView = config.viewTypeFolders == VIEW_TYPE_FOLDER_GRID
     private var pinnedFolders = config.pinnedFolders
     private var scrollHorizontally = config.scrollHorizontally
     private var animateGifs = config.animateGifs
@@ -132,6 +137,7 @@ class DirectoryAdapter(
     private var lockedFolderPaths = ArrayList<String>()
     private var isDragAndDropping = false
     private var startReorderDragListener: StartReorderDragListener? = null
+    private val folderGridCovers = ConcurrentHashMap<String, List<String>>()
 
     private var showMediaCount = config.showFolderMediaCount
     private var folderStyle = config.folderStyle
@@ -143,6 +149,7 @@ class DirectoryAdapter(
     init {
         setupDragListener(true)
         fillLockedFolders()
+        fillFolderGridCovers()
     }
 
     override fun getActionMenuId() = R.menu.cab_directories
@@ -150,6 +157,7 @@ class DirectoryAdapter(
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = when {
             isListViewType -> DirectoryItemListBinding.inflate(layoutInflater, parent, false)
+            isFolderGridView -> DirectoryItemGridTilesBinding.inflate(layoutInflater, parent, false)
             folderStyle == FOLDER_STYLE_SQUARE -> DirectoryItemGridSquareBinding.inflate(layoutInflater, parent, false)
             else -> DirectoryItemGridRoundedCornersBinding.inflate(layoutInflater, parent, false)
         }
@@ -249,7 +257,9 @@ class DirectoryAdapter(
     override fun onViewRecycled(holder: ViewHolder) {
         super.onViewRecycled(holder)
         if (!activity.isDestroyed) {
-            Glide.with(activity).clear(bindItem(holder.itemView).dirThumbnail)
+            bindItem(holder.itemView).dirThumbnails.forEach {
+                Glide.with(activity).clear(it)
+            }
         }
     }
 
@@ -811,12 +821,80 @@ class DirectoryAdapter(
         }
     }
 
+    private fun fillFolderGridCovers() {
+        if (!isFolderGridView) {
+            return
+        }
+
+        ensureBackgroundThread {
+            val pendingCovers = HashMap<String, List<String>>()
+            dirs.filter { !folderGridCovers.containsKey(getFolderGridCoverKey(it)) }.forEach { directory ->
+                pendingCovers[getFolderGridCoverKey(directory)] = getFolderGridCovers(directory)
+            }
+
+            activity.runOnUiThread {
+                if (!activity.isDestroyed) {
+                    folderGridCovers.putAll(pendingCovers)
+                    notifyDataSetChanged()
+                }
+            }
+        }
+    }
+
+    private fun getFolderGridCoverKey(directory: Directory) = "${directory.path}-${directory.modified}"
+
+    private fun getFolderGridCoversToShow(directory: Directory): List<String> {
+        val covers = ArrayList<String>(FOLDER_GRID_COVER_COUNT)
+        if (directory.tmb.isNotEmpty()) {
+            covers.add(directory.tmb)
+        }
+
+        folderGridCovers[getFolderGridCoverKey(directory)]?.forEach { path ->
+            if (covers.size < FOLDER_GRID_COVER_COUNT && !covers.contains(path)) {
+                covers.add(path)
+            }
+        }
+
+        return covers
+    }
+
+    private fun getFolderGridCovers(directory: Directory): List<String> {
+        val covers = ArrayList<String>(FOLDER_GRID_COVER_COUNT)
+        try {
+            val paths = if (directory.areFavorites()) {
+                activity.favoritesDB.getValidFavoritePaths()
+            } else if (!directory.isRecycleBin()) {
+                activity.mediaDB.getFolderGridCoverPaths(directory.path, FOLDER_GRID_COVER_COUNT)
+            } else {
+                emptyList()
+            }
+
+            paths.forEach { path ->
+                if (covers.size < FOLDER_GRID_COVER_COUNT && path != directory.tmb && !covers.contains(path)) {
+                    covers.add(path)
+                }
+            }
+        } catch (ignored: Exception) {
+        }
+
+        return covers
+    }
+
+    private fun getThumbnailType(path: String) = when {
+        path.isVideoFast() -> TYPE_VIDEOS
+        path.isGif() -> TYPE_GIFS
+        path.isRawFast() -> TYPE_RAWS
+        path.isSvg() -> TYPE_SVGS
+        else -> TYPE_IMAGES
+    }
+
     fun updateDirs(newDirs: ArrayList<Directory>) {
         val directories = newDirs.clone() as ArrayList<Directory>
         if (directories.hashCode() != currentDirectoriesHash) {
             currentDirectoriesHash = directories.hashCode()
             dirs = directories
             fillLockedFolders()
+            fillFolderGridCovers()
             notifyDataSetChanged()
             finishActMode()
         }
@@ -836,13 +914,7 @@ class DirectoryAdapter(
         val isSelected = selectedKeys.contains(directory.path.hashCode())
         bindItem(view).apply {
             dirPath?.text = "${directory.path.substringBeforeLast("/")}/"
-            val thumbnailType = when {
-                directory.tmb.isVideoFast() -> TYPE_VIDEOS
-                directory.tmb.isGif() -> TYPE_GIFS
-                directory.tmb.isRawFast() -> TYPE_RAWS
-                directory.tmb.isSvg() -> TYPE_SVGS
-                else -> TYPE_IMAGES
-            }
+            val thumbnailType = getThumbnailType(directory.tmb)
 
             dirCheck.beVisibleIf(isSelected)
             if (isSelected) {
@@ -854,8 +926,8 @@ class DirectoryAdapter(
                 dirHolder.isSelected = isSelected
             }
 
-            if (scrollHorizontally && !isListViewType && folderStyle == FOLDER_STYLE_ROUNDED_CORNERS) {
-                (dirThumbnail.layoutParams as RelativeLayout.LayoutParams).addRule(RelativeLayout.ABOVE, dirName.id)
+            if (scrollHorizontally && !isListViewType && !isFolderGridView && folderStyle == FOLDER_STYLE_ROUNDED_CORNERS) {
+                (dirThumbnails.first().layoutParams as RelativeLayout.LayoutParams).addRule(RelativeLayout.ABOVE, dirName.id)
 
                 val photoCntParams = (photoCnt.layoutParams as RelativeLayout.LayoutParams)
                 val nameParams = (dirName.layoutParams as RelativeLayout.LayoutParams)
@@ -880,32 +952,63 @@ class DirectoryAdapter(
                 dirLock.beGone()
                 val roundedCorners = when {
                     isListViewType -> ROUNDED_CORNERS_SMALL
-                    folderStyle == FOLDER_STYLE_SQUARE -> ROUNDED_CORNERS_NONE
+                    isFolderGridView || folderStyle == FOLDER_STYLE_SQUARE -> ROUNDED_CORNERS_NONE
                     else -> ROUNDED_CORNERS_BIG
                 }
 
-                dirThumbnail.setBackgroundResource(
-                    when (roundedCorners) {
-                        ROUNDED_CORNERS_SMALL -> R.drawable.placeholder_rounded_small
-                        ROUNDED_CORNERS_BIG -> R.drawable.placeholder_rounded_big
-                        else -> R.drawable.placeholder_square
-                    }
-                )
+                dirThumbnails.forEach { thumbnail ->
+                    thumbnail.setBackgroundResource(
+                        when (roundedCorners) {
+                            ROUNDED_CORNERS_SMALL -> R.drawable.placeholder_rounded_small
+                            ROUNDED_CORNERS_BIG -> R.drawable.placeholder_rounded_big
+                            else -> R.drawable.placeholder_square
+                        }
+                    )
+                }
 
-                activity.loadImage(
-                    type = thumbnailType,
-                    path = directory.tmb,
-                    target = dirThumbnail,
-                    horizontalScroll = scrollHorizontally,
-                    animateGifs = animateGifs,
-                    cropThumbnails = cropThumbnails,
-                    roundCorners = roundedCorners,
-                    signature = directory.getKey(),
-                    onError = {
-                        dirThumbnail.scaleType = ImageView.ScaleType.CENTER
-                        dirThumbnail.setImageDrawable(AppCompatResources.getDrawable(activity, R.drawable.ic_vector_warning_colored))
+                if (isFolderGridView) {
+                    // the folder grid stitches up to four covers together, the first tile is always the folder cover
+                    val covers = getFolderGridCoversToShow(directory)
+                    dirThumbnails.forEachIndexed { index, thumbnail ->
+                        val coverPath = covers.getOrNull(index)
+                        if (coverPath == null) {
+                            thumbnail.scaleType = ImageView.ScaleType.CENTER_CROP
+                            thumbnail.setImageDrawable(null)
+                        } else {
+                            thumbnail.scaleType = ImageView.ScaleType.CENTER_CROP
+                            activity.loadImage(
+                                type = getThumbnailType(coverPath),
+                                path = coverPath,
+                                target = thumbnail,
+                                // tiles must always measure square by width, even when scrolling horizontally
+                                horizontalScroll = false,
+                                animateGifs = animateGifs,
+                                cropThumbnails = true,
+                                roundCorners = ROUNDED_CORNERS_NONE,
+                                signature = directory.getKey(),
+                                onError = {
+                                    thumbnail.scaleType = ImageView.ScaleType.CENTER
+                                    thumbnail.setImageDrawable(AppCompatResources.getDrawable(activity, R.drawable.ic_vector_warning_colored))
+                                }
+                            )
+                        }
                     }
-                )
+                } else {
+                    activity.loadImage(
+                        type = thumbnailType,
+                        path = directory.tmb,
+                        target = dirThumbnails.first(),
+                        horizontalScroll = scrollHorizontally,
+                        animateGifs = animateGifs,
+                        cropThumbnails = cropThumbnails,
+                        roundCorners = roundedCorners,
+                        signature = directory.getKey(),
+                        onError = {
+                            dirThumbnails.first().scaleType = ImageView.ScaleType.CENTER
+                            dirThumbnails.first().setImageDrawable(AppCompatResources.getDrawable(activity, R.drawable.ic_vector_warning_colored))
+                        }
+                    )
+                }
             }
 
             dirPin.beVisibleIf(pinnedFolders.contains(directory.path))
@@ -989,6 +1092,7 @@ class DirectoryAdapter(
     private fun bindItem(view: View): DirectoryItemBinding {
         return when {
             isListViewType -> DirectoryItemListBinding.bind(view).toItemBinding()
+            isFolderGridView -> DirectoryItemGridTilesBinding.bind(view).toItemBinding()
             folderStyle == FOLDER_STYLE_SQUARE -> DirectoryItemGridSquareBinding.bind(view).toItemBinding()
             else -> DirectoryItemGridRoundedCornersBinding.bind(view).toItemBinding()
         }

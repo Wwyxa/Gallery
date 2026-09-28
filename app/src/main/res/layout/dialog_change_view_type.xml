@@ -26,6 +26,12 @@
                 android:text="@string/grid" />
 
             <org.fossify.commons.views.MyCompatRadioButton
+                android:id="@+id/change_view_type_dialog_radio_folder_grid"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/folder_grid" />
+
+            <org.fossify.commons.views.MyCompatRadioButton
                 android:id="@+id/change_view_type_dialog_radio_list"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
