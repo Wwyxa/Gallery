@@ -112,6 +112,7 @@ import org.fossify.gallery.extensions.storeDirectoryItems
 import org.fossify.gallery.extensions.tryDeleteFileDirItem
 import org.fossify.gallery.extensions.updateDBDirectory
 import org.fossify.gallery.extensions.updateWidgets
+import org.fossify.gallery.helpers.CURRENT_SEARCH_QUERY
 import org.fossify.gallery.helpers.DIRECTORY
 import org.fossify.gallery.helpers.GET_ANY_INTENT
 import org.fossify.gallery.helpers.GET_IMAGE_INTENT
@@ -640,6 +641,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     private fun launchSearchActivity() {
         hideKeyboard()
         Intent(this, SearchActivity::class.java).apply {
+            putExtra(CURRENT_SEARCH_QUERY, binding.mainMenu.getCurrentQuery())
             startActivity(this)
         }
 
