@@ -151,6 +151,7 @@ import org.fossify.gallery.helpers.FadePageTransformer
 import org.fossify.gallery.helpers.GO_TO_NEXT_ITEM
 import org.fossify.gallery.helpers.GO_TO_PREV_ITEM
 import org.fossify.gallery.helpers.HIDE_SYSTEM_UI_DELAY
+import org.fossify.gallery.helpers.IS_FROM_SEARCH
 import org.fossify.gallery.helpers.IS_VIEW_INTENT
 import org.fossify.gallery.helpers.MAX_PRINT_SIDE_SIZE
 import org.fossify.gallery.helpers.PATH
@@ -190,6 +191,11 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     companion object {
         private const val REQUEST_VIEW_VIDEO = 1
         private const val SAVED_PATH = "current_path"
+
+        // search results handed over by the search screens right before launching the viewer, so
+        // swiping stays inside the results; kept outside the intent because a result set can be
+        // too large for a transaction, it is only read when IS_FROM_SEARCH is set
+        var searchMedia = ArrayList<Medium>()
     }
 
     private var mPath = ""
@@ -210,6 +216,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     private var mIsOrientationLocked = false
 
     private var mMediaFiles = ArrayList<Medium>()
+    private var mIsFromSearch = false
     private var mFavoritePaths = ArrayList<String>()
     private var mIgnoredPaths = ArrayList<String>()
     private var mOriginalBrightness: Float? = null
@@ -233,7 +240,15 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         refreshMenuItems()
 
         window.decorView.setBackgroundColor(getProperBackgroundColor())
-        (MediaActivity.mMedia.clone() as ArrayList<ThumbnailItem>).filterIsInstanceTo(mMediaFiles, Medium::class.java)
+        // search results replace the last visited folder's list as the swipe scope, they also
+        // make the viewer skip the folder refetch; an empty list means the process was recreated
+        // and the results are gone, the viewer then falls back to the regular folder behavior
+        mIsFromSearch = intent.getBooleanExtra(IS_FROM_SEARCH, false) && searchMedia.isNotEmpty()
+        if (mIsFromSearch) {
+            mMediaFiles.addAll(searchMedia)
+        } else {
+            (MediaActivity.mMedia.clone() as ArrayList<ThumbnailItem>).filterIsInstanceTo(mMediaFiles, Medium::class.java)
+        }
 
         requestMediaPermissions {
             initViewPager(
@@ -487,6 +502,13 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         }
         binding.mediumViewerToolbar.title = mPath.getFilenameFromPath()
 
+        // MediaActivity.mMedia holds the list of the last visited screen, it is only a valid fast
+        // preview when it contains the file being opened, otherwise its first item would be shown
+        // instead of the clicked one until the real folder finishes loading
+        if (mMediaFiles.none { it.path.equals(mPath, true) }) {
+            mMediaFiles.clear()
+        }
+
         binding.viewPager.onGlobalLayout {
             if (!isDestroyed) {
                 if (mMediaFiles.isNotEmpty()) {
@@ -506,7 +528,9 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
             gotMedia(mMediaFiles as ArrayList<ThumbnailItem>, refetchViewPagerPosition = true)
         }
 
-        refreshViewPager(true)
+        if (!mIsFromSearch) {
+            refreshViewPager(true)
+        }
         binding.viewPager.offscreenPageLimit = 2
 
         if (config.blackBackground) {
@@ -1140,6 +1164,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
 
     private fun restoreFile() {
         restoreRecycleBinPath(getCurrentPath()) {
+            mIgnoredPaths.add(getCurrentPath())
             refreshViewPager()
         }
     }
@@ -1314,6 +1339,13 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     }
 
     private fun refreshViewPager(refetchPosition: Boolean = false) {
+        if (mIsFromSearch) {
+            // the pager list is the handed-over search results, there is no folder to refetch,
+            // re-emitting the current list lets the position be resolved against it again
+            gotMedia(mMediaFiles.clone() as ArrayList<ThumbnailItem>, refetchViewPagerPosition = refetchPosition)
+            return
+        }
+
         val isRandomSorting = config.getFolderSorting(mDirectory) and SORT_BY_RANDOM != 0
         if (!isRandomSorting || isExternalIntent()) {
             GetMediaAsynctask(applicationContext, mDirectory, isPickImage = false, isPickVideo = false, showAll = mShowAll) {
