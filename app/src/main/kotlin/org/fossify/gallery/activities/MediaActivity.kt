@@ -93,6 +93,7 @@ import org.fossify.gallery.helpers.GET_ANY_INTENT
 import org.fossify.gallery.helpers.GET_IMAGE_INTENT
 import org.fossify.gallery.helpers.GET_VIDEO_INTENT
 import org.fossify.gallery.helpers.GridSpacingItemDecoration
+import org.fossify.gallery.helpers.IS_FROM_SEARCH
 import org.fossify.gallery.helpers.IS_IN_RECYCLE_BIN
 import org.fossify.gallery.helpers.MAX_COLUMN_COUNT
 import org.fossify.gallery.helpers.MOSAIC_TOTAL_SPANS
@@ -1047,6 +1048,10 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     }
 
     private fun openInViewPager(path: String) {
+        if (mLastSearchedText.isNotEmpty()) {
+            ViewPagerActivity.searchMedia = getMediaAdapter()?.media?.filterIsInstanceTo(ArrayList<Medium>()) ?: ArrayList()
+        }
+
         Intent(this, ViewPagerActivity::class.java).apply {
             putExtra(SKIP_AUTHENTICATION, shouldSkipAuthentication())
             putExtra(PATH, path)
@@ -1054,6 +1059,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             putExtra(SHOW_FAVORITES, mPath == FAVORITES)
             putExtra(SHOW_RECYCLE_BIN, mPath == RECYCLE_BIN)
             putExtra(IS_FROM_GALLERY, true)
+            putExtra(IS_FROM_SEARCH, mLastSearchedText.isNotEmpty())
             startActivity(this)
         }
     }

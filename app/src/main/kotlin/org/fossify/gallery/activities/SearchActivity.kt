@@ -17,7 +17,9 @@ import org.fossify.gallery.adapters.MediaAdapter
 import org.fossify.gallery.asynctasks.GetMediaAsynctask
 import org.fossify.gallery.databinding.ActivitySearchBinding
 import org.fossify.gallery.extensions.*
+import org.fossify.gallery.helpers.CURRENT_SEARCH_QUERY
 import org.fossify.gallery.helpers.GridSpacingItemDecoration
+import org.fossify.gallery.helpers.IS_FROM_SEARCH
 import org.fossify.gallery.helpers.MOSAIC_TOTAL_SPANS
 import org.fossify.gallery.helpers.MediaFetcher
 import org.fossify.gallery.helpers.PATH
@@ -44,6 +46,7 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
+        mLastSearchedText = intent.getStringExtra(CURRENT_SEARCH_QUERY).orEmpty()
         setupOptionsMenu()
         setupEdgeToEdge(
             padTopSystem = listOf(binding.searchMenu),
@@ -65,6 +68,15 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
     }
 
     private fun setupOptionsMenu() {
+        // the query must be set before setupMenu attaches the text watcher, otherwise it would
+        // trigger a search against the not yet loaded media
+        if (mLastSearchedText.isNotEmpty()) {
+            binding.searchMenu.binding.topToolbarSearch.apply {
+                setText(mLastSearchedText)
+                setSelection(mLastSearchedText.length)
+            }
+        }
+
         binding.searchMenu.requireToolbar().inflateMenu(R.menu.menu_search)
         binding.searchMenu.toggleHideOnScroll(true)
         binding.searchMenu.setupMenu()
@@ -132,6 +144,9 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
             }
             setupLayoutManager()
             handleGridSpacing(mAllMedia)
+            if (mLastSearchedText.isNotEmpty()) {
+                textChanged(mLastSearchedText)
+            }
         } else if (mLastSearchedText.isEmpty()) {
             (currAdapter as MediaAdapter).updateMedia(mAllMedia)
             handleGridSpacing(mAllMedia)
@@ -187,9 +202,11 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
     }
 
     private fun openInViewPager(path: String) {
+        ViewPagerActivity.searchMedia = getMediaAdapter()?.media?.filterIsInstanceTo(ArrayList<Medium>()) ?: ArrayList()
         Intent(this, ViewPagerActivity::class.java).apply {
             putExtra(PATH, path)
             putExtra(SHOW_ALL, false)
+            putExtra(IS_FROM_SEARCH, true)
             startActivity(this)
         }
     }
@@ -277,7 +294,7 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
             runOnUiThread {
                 setupAdapter()
             }
-            startAsyncTask(false)
+            startAsyncTask(mLastSearchedText.isNotEmpty())
         }
     }
 
