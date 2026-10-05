@@ -808,6 +808,8 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
                 val videoFragment = (binding.viewPager.adapter as? MyPagerAdapter)?.getCurrentFragment(mPos) as? VideoFragment
                 if (videoFragment?.view != null) {
                     videoFragment.playVideo()
+                    // keep the video controls in sync after a page change, the new fragment starts hidden
+                    setSlideshowVideoControlsVisible(binding.slideshowControls.slideshowControlsHolder.isVisible())
                 } else {
                     mSlideshowHandler.postDelayed({ if (mIsSlideshowActive && !isDestroyed) scheduleSwipe() }, 100)
                 }
@@ -893,6 +895,13 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
         binding.slideshowControls.slideshowControlsHolder.beVisible()
         binding.slideshowControls.slideshowControlsHolder.postDelayed(mSlideshowControlsFadeRunnable, SLIDESHOW_CONTROLS_FADE_DELAY)
         showSlideshowTopBar()
+        setSlideshowVideoControlsVisible(true)
+        // the pill knows its height (including the nav bar inset) only after being laid out once
+        binding.slideshowControls.slideshowControlsHolder.post {
+            if (mIsSlideshowActive && binding.slideshowControls.slideshowControlsHolder.isVisible()) {
+                setSlideshowVideoControlsVisible(true)
+            }
+        }
     }
 
     private fun hideSlideshowControls() {
@@ -901,6 +910,19 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
         binding.slideshowControls.slideshowControlsHolder.beGone()
         binding.slideshowControls.slideshowControlsHolder.alpha = 1f
         hideSlideshowTopBar()
+        setSlideshowVideoControlsVisible(false)
+    }
+
+    // the video controls follow the pill and the top bar visibility; while shown they are lifted
+    // above the pill, otherwise the two would overlap at the bottom of the screen
+    private fun setSlideshowVideoControlsVisible(visible: Boolean) {
+        val bottomMargin = if (visible) {
+            binding.slideshowControls.slideshowControlsHolder.height +
+                resources.getDimensionPixelSize(org.fossify.commons.R.dimen.medium_margin)
+        } else {
+            0
+        }
+        (binding.viewPager.adapter as? MyPagerAdapter)?.setVideoControlsVisible(visible, bottomMargin)
     }
 
     // the bottom action bar stays hidden during a slideshow, it would overlap the controls pill
@@ -925,6 +947,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
                 binding.slideshowControls.slideshowControlsHolder.beGone()
             }.start()
             hideSlideshowTopBar()
+            setSlideshowVideoControlsVisible(false)
         } else {
             showSlideshowControls()
         }
@@ -935,6 +958,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
             binding.slideshowControls.slideshowControlsHolder.beGone()
         }.start()
         hideSlideshowTopBar()
+        setSlideshowVideoControlsVisible(false)
     }
 
     private fun swipeToNextMedium() {
