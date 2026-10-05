@@ -147,6 +147,9 @@
     <string name="slide">Slide</string>
     <string name="slideshow_ended">The slideshow ended</string>
     <string name="no_media_for_slideshow">No media for the slideshow have been found</string>
+    <string name="slideshow_pause">Pause the slideshow</string>
+    <string name="slideshow_resume">Resume the slideshow</string>
+    <string name="slideshow_stop">Stop the slideshow</string>
 
     <!-- View types -->
     <string name="group_direct_subfolders">Group direct subfolders</string>
@@ -183,6 +186,9 @@
     <string name="screen_rotation_system_setting">System setting</string>
     <string name="screen_rotation_device_rotation">Device rotation</string>
     <string name="screen_rotation_aspect_ratio">Aspect ratio</string>
+    <string name="swipe_direction">Swipe direction when viewing media</string>
+    <string name="swipe_direction_horizontal">Horizontal swiping</string>
+    <string name="swipe_direction_vertical">Vertical swiping</string>
     <string name="black_background_at_fullscreen">Black background at fullscreen media</string>
     <string name="scroll_thumbnails_horizontally">Scroll thumbnails horizontally</string>
     <string name="hide_system_ui_at_fullscreen">Automatically hide system UI at fullscreen media</string>
@@ -203,7 +209,7 @@
     <string name="deep_zoomable_images">Deep zoomable images</string>
     <string name="show_highest_quality">Show images in the highest possible quality</string>
     <string name="show_recycle_bin_last">Show the recycle bin as the last item on the main screen</string>
-    <string name="allow_down_gesture">Allow closing the fullscreen view with a down gesture</string>
+    <string name="allow_down_gesture">Allow closing the fullscreen view with a swipe gesture</string>
     <string name="allow_one_to_one_zoom">Allow 1:1 zooming in with two double taps</string>
     <string name="open_videos_on_separate_screen">Play videos on a separate screen with horizontal gestures</string>
     <string name="on_video_tap">On video tap</string>
