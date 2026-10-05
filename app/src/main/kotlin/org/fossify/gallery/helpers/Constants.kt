@@ -90,6 +90,18 @@ const val LAST_EDITOR_DRAW_COLOR = "last_editor_draw_color"
 const val LAST_EDITOR_BRUSH_SIZE = "last_editor_brush_size"
 const val SHOW_NOTCH = "show_notch"
 const val FILE_LOADING_PRIORITY = "file_loading_priority"
+const val GLIDE_DISK_CACHE_SIZE = "glide_disk_cache_size"
+const val WAS_INTERNAL_GLIDE_CACHE_CLEARED = "was_internal_glide_cache_cleared"
+
+// thumbnail disk cache, values are in megabytes
+const val GLIDE_DISK_CACHE_250_MB = 250
+const val GLIDE_DISK_CACHE_512_MB = 512
+const val GLIDE_DISK_CACHE_1_GB = 1024
+const val GLIDE_DISK_CACHE_2_GB = 2048
+const val GLIDE_DISK_CACHE_4_GB = 4096
+const val DEFAULT_GLIDE_DISK_CACHE_SIZE_MB = GLIDE_DISK_CACHE_1_GB
+const val MB_IN_BYTES = 1024L * 1024L
+const val GLIDE_CACHE_MAX_FREE_SPACE_RATIO = 0.25
 const val SPAM_FOLDERS_CHECKED = "spam_folders_checked"
 const val SHOW_THUMBNAIL_FILE_TYPES = "show_thumbnail_file_types"
 const val MARK_FAVORITE_ITEMS = "mark_favorite_items"
