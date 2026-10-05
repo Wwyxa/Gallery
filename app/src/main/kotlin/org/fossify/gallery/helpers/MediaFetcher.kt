@@ -309,6 +309,7 @@ class MediaFetcher(val context: Context) {
         val fileSizes = if (checkProperFileSize || checkFileExistence) getFolderSizes(folder) else HashMap()
         val dimensions = if (isRatioBasedViewType(config.getFolderViewType(folder))) getFolderDimensions(folder) else HashMap()
         val storedVideoDimensions = getStoredVideoDimensions()
+        val videoDurations = if (getVideoDurations) getFolderDurations(folder) else HashMap()
 
         val files = when (folder) {
             FAVORITES -> favoritePaths.filter { showHidden || !it.contains("/.") }.map { File(it) }.toMutableList() as ArrayList<File>
@@ -399,7 +400,12 @@ class MediaFetcher(val context: Context) {
                 lastModified = newLastModified
 
                 var dateTaken = lastModified
-                val videoDuration = if (getVideoDurations && isVideo) context.getDuration(path) ?: 0 else 0
+                val videoDuration = if (getVideoDurations && isVideo) {
+                    // fall back to opening the video itself when it is missing from MediaStore (hidden folders)
+                    videoDurations.remove(path) ?: (context.getDuration(path) ?: 0)
+                } else {
+                    0
+                }
 
                 if (getProperDateTaken) {
                     var newDateTaken = dateTakens.remove(path)
@@ -829,6 +835,38 @@ class MediaFetcher(val context: Context) {
         }
 
         return dimensions
+    }
+
+    // one MediaStore query per folder instead of opening a MediaMetadataRetriever for every single video
+    private fun getFolderDurations(folder: String): HashMap<String, Int> {
+        val durations = HashMap<String, Int>()
+        if (folder == FAVORITES || folder == RECYCLE_BIN) {
+            return durations
+        }
+
+        val projection = arrayOf(
+            Images.Media.DATA,
+            MediaStore.MediaColumns.DURATION
+        )
+
+        val uri = Files.getContentUri("external")
+        val selection = "${Images.Media.DATA} LIKE ? AND ${Images.Media.DATA} NOT LIKE ?"
+        val selectionArgs = arrayOf("$folder/%", "$folder/%/%")
+
+        try {
+            context.queryCursor(uri, projection, selection, selectionArgs) { cursor ->
+                try {
+                    val duration = Math.round(cursor.getLongValue(MediaStore.MediaColumns.DURATION) / 1000.0).toInt()
+                    if (duration != 0) {
+                        durations[cursor.getStringValue(Images.Media.DATA)] = duration
+                    }
+                } catch (ignored: Exception) {
+                }
+            }
+        } catch (ignored: Exception) {
+        }
+
+        return durations
     }
 
     private fun getStoredDimension(cursor: Cursor): Point? {
