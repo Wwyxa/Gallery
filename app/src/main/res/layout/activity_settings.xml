@@ -313,6 +313,21 @@
             </RelativeLayout>
 
             <RelativeLayout
+                android:id="@+id/settings_allow_video_seek_gestures_holder"
+                style="@style/SettingsHolderSwitchStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <org.fossify.commons.views.MyMaterialSwitch
+                    android:id="@+id/settings_allow_video_seek_gestures"
+                    style="@style/SettingsSwitchStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/allow_video_seek_gestures" />
+
+            </RelativeLayout>
+
+            <RelativeLayout
                 android:id="@+id/settings_on_video_tap_holder"
                 style="@style/SettingsHolderTextViewStyle"
                 android:layout_width="match_parent"

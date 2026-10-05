@@ -84,6 +84,7 @@ class SettingsActivity : SimpleActivity() {
         setupKeepScreenOn()
         setupAllowPhotoGestures()
         setupAllowVideoGestures()
+        setupAllowVideoSeekGestures()
         setupAllowDownGesture()
         setupAllowRotatingWithGestures()
         setupShowNotch()
@@ -508,6 +509,14 @@ class SettingsActivity : SimpleActivity() {
         binding.settingsAllowVideoGesturesHolder.setOnClickListener {
             binding.settingsAllowVideoGestures.toggle()
             config.allowVideoGestures = binding.settingsAllowVideoGestures.isChecked
+        }
+    }
+
+    private fun setupAllowVideoSeekGestures() {
+        binding.settingsAllowVideoSeekGestures.isChecked = config.allowVideoSeekGestures
+        binding.settingsAllowVideoSeekGesturesHolder.setOnClickListener {
+            binding.settingsAllowVideoSeekGestures.toggle()
+            config.allowVideoSeekGestures = binding.settingsAllowVideoSeekGestures.isChecked
         }
     }
 
