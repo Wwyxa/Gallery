@@ -27,6 +27,7 @@ const val PLAYBACK_SPEED_PROGRESS = "playback_speed_progress"
 const val CROP_THUMBNAILS = "crop_thumbnails"
 const val SHOW_THUMBNAIL_VIDEO_DURATION = "show_thumbnail_video_duration"
 const val SCREEN_ROTATION = "screen_rotation"
+const val SWIPE_DIRECTION = "swipe_direction"
 const val DISPLAY_FILE_NAMES = "display_file_names"
 const val BLACK_BACKGROUND = "dark_background"
 const val PINNED_FOLDERS = "pinned_folders"
@@ -178,6 +179,10 @@ const val TEMP_FOLDER_NAME = "images"
 const val ROTATE_BY_SYSTEM_SETTING = 0
 const val ROTATE_BY_DEVICE_ROTATION = 1
 const val ROTATE_BY_ASPECT_RATIO = 2
+
+// swipe directions
+const val SWIPE_DIRECTION_HORIZONTAL = 0
+const val SWIPE_DIRECTION_VERTICAL = 1
 
 // video player type
 const val VIDEO_PLAYER_APP = 0

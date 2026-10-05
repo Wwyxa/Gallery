@@ -21,15 +21,18 @@ import android.graphics.Color
 import android.graphics.drawable.Icon
 import android.os.Bundle
 import android.os.Handler
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import android.widget.Toast
 import androidx.core.graphics.drawable.toDrawable
 import androidx.exifinterface.media.ExifInterface
 import androidx.print.PrintHelper
-import androidx.viewpager.widget.ViewPager
+import androidx.viewpager2.widget.ViewPager2
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.DiskCacheStrategy
@@ -57,6 +60,7 @@ import org.fossify.commons.extensions.getImageResolution
 import org.fossify.commons.extensions.getIsPathDirectory
 import org.fossify.commons.extensions.getParentPath
 import org.fossify.commons.extensions.getProperBackgroundColor
+import org.fossify.commons.extensions.isVisible
 import org.fossify.commons.extensions.getResolution
 import org.fossify.commons.extensions.getUriMimeType
 import org.fossify.commons.extensions.handleDeletePasswordProtection
@@ -145,7 +149,6 @@ import org.fossify.gallery.helpers.BOTTOM_ACTION_SLIDESHOW
 import org.fossify.gallery.helpers.BOTTOM_ACTION_TOGGLE_FAVORITE
 import org.fossify.gallery.helpers.BOTTOM_ACTION_TOGGLE_VISIBILITY
 import org.fossify.gallery.helpers.ColorModeHelper
-import org.fossify.gallery.helpers.DefaultPageTransformer
 import org.fossify.gallery.helpers.EXT_NAME
 import org.fossify.gallery.helpers.FadePageTransformer
 import org.fossify.gallery.helpers.GO_TO_NEXT_ITEM
@@ -173,6 +176,7 @@ import org.fossify.gallery.helpers.SLIDESHOW_DEFAULT_INTERVAL
 import org.fossify.gallery.helpers.SLIDESHOW_FADE_DURATION
 import org.fossify.gallery.helpers.SLIDESHOW_SLIDE_DURATION
 import org.fossify.gallery.helpers.SLIDESHOW_START_ON_ENTER
+import org.fossify.gallery.helpers.SWIPE_DIRECTION_VERTICAL
 import org.fossify.gallery.helpers.TYPE_GIFS
 import org.fossify.gallery.helpers.TYPE_IMAGES
 import org.fossify.gallery.helpers.TYPE_PORTRAITS
@@ -187,10 +191,11 @@ import java.io.File
 import kotlin.math.min
 
 @Suppress("UNCHECKED_CAST")
-class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, ViewPagerFragment.FragmentListener {
+class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListener {
     companion object {
         private const val REQUEST_VIEW_VIDEO = 1
         private const val SAVED_PATH = "current_path"
+        private const val SLIDESHOW_CONTROLS_FADE_DELAY = 3000L
 
         // search results handed over by the search screens right before launching the viewer, so
         // swiping stays inside the results; kept outside the intent because a result set can be
@@ -212,6 +217,10 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     private var mSlideshowMedia = mutableListOf<Medium>()
     private var mAreSlideShowMediaVisible = false
     private var mRandomSlideshowStopped = false
+    private var mIsSlideshowPaused = false
+    private var mNextSwipeAt = 0L
+    private var mSlideshowPausedRemainingMs = 0L
+    private var mSlideshowCountdownAnimator: ValueAnimator? = null
 
     private var mIsOrientationLocked = false
 
@@ -233,10 +242,11 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
         setupEdgeToEdge(
-            padBottomSystem = listOf(binding.bottomActions.bottomActionsWrapper),
+            padBottomSystem = listOf(binding.bottomActions.bottomActionsWrapper, binding.slideshowControls.slideshowControlsHolder),
         )
 
         setupOptionsMenu()
+        setupSlideshowControls()
         refreshMenuItems()
 
         window.decorView.setBackgroundColor(getProperBackgroundColor())
@@ -269,6 +279,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         initBottomActions()
         mOriginalBrightness = window.updateBrightness(config.maxBrightness, mOriginalBrightness)
         setupOrientation()
+        updateSwipeDirection()
         refreshMenuItems()
 
         val filename = getCurrentMedium()?.name ?: mPath.getFilenameFromPath()
@@ -597,18 +608,33 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         }
     }
 
+    private fun updateSwipeDirection() {
+        binding.viewPager.orientation = if (config.swipeDirection == SWIPE_DIRECTION_VERTICAL) {
+            ViewPager2.ORIENTATION_VERTICAL
+        } else {
+            ViewPager2.ORIENTATION_HORIZONTAL
+        }
+    }
+
     private fun updatePagerItems(media: MutableList<Medium>) {
-        val pagerAdapter = MyPagerAdapter(this, supportFragmentManager, media)
-        if (!isDestroyed) {
-            pagerAdapter.shouldInitFragment = mPos < 5
-            binding.viewPager.apply {
-                // must remove the listener before changing adapter, otherwise it might cause `mPos` to be set to 0
-                removeOnPageChangeListener(this@ViewPagerActivity)
-                adapter = pagerAdapter
-                pagerAdapter.shouldInitFragment = true
-                addOnPageChangeListener(this@ViewPagerActivity)
-                currentItem = mPos
-            }
+        if (isDestroyed) {
+            return
+        }
+
+        var pagerAdapter = binding.viewPager.adapter as? MyPagerAdapter
+        if (pagerAdapter == null) {
+            pagerAdapter = MyPagerAdapter(this, media)
+            binding.viewPager.adapter = pagerAdapter
+        }
+
+        // must unregister while the data changes, otherwise intermediate page events might mess up `mPos`
+        binding.viewPager.unregisterOnPageChangeCallback(mOnPageChangeCallback)
+        pagerAdapter.updateCurrentPosition(mPos)
+        pagerAdapter.updateMedia(media)
+        binding.viewPager.registerOnPageChangeCallback(mOnPageChangeCallback)
+        if (mPos != -1 && pagerAdapter.itemCount > 0) {
+            // mPos may be beyond the new list bounds when the last items got deleted
+            binding.viewPager.setCurrentItem(mPos.coerceAtMost(pagerAdapter.itemCount - 1), false)
         }
     }
 
@@ -629,7 +655,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
             binding.viewPager.onGlobalLayout {
                 if (!isDestroyed) {
                     if (config.slideshowAnimation == SLIDESHOW_ANIMATION_FADE) {
-                        binding.viewPager.setPageTransformer(false, FadePageTransformer())
+                        binding.viewPager.setPageTransformer(FadePageTransformer(binding.viewPager.orientation == ViewPager2.ORIENTATION_VERTICAL))
                     }
 
                     hideSystemUI()
@@ -643,6 +669,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                     mIsSlideshowActive = true
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     scheduleSwipe()
+                    showSlideshowControls()
                 }
             }
         }
@@ -651,7 +678,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     private fun goToNextMedium(forward: Boolean) {
         val oldPosition = binding.viewPager.currentItem
         val newPosition = if (forward) oldPosition + 1 else oldPosition - 1
-        if (newPosition == -1 || newPosition > binding.viewPager.adapter!!.count - 1) {
+        if (newPosition == -1 || newPosition > binding.viewPager.adapter!!.itemCount - 1) {
             slideshowEnded(forward)
         } else {
             binding.viewPager.setCurrentItem(newPosition, false)
@@ -660,7 +687,8 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
 
     private fun animatePagerTransition(forward: Boolean) {
         val oldPosition = binding.viewPager.currentItem
-        val animator = ValueAnimator.ofInt(0, binding.viewPager.width)
+        val dragDistance = if (binding.viewPager.orientation == ViewPager2.ORIENTATION_VERTICAL) binding.viewPager.height else binding.viewPager.width
+        val animator = ValueAnimator.ofInt(0, dragDistance)
         animator.addListener(object : Animator.AnimatorListener {
             override fun onAnimationEnd(animation: Animator) {
                 if (binding.viewPager.isFakeDragging) {
@@ -717,7 +745,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
             if (forward) {
                 binding.viewPager.setCurrentItem(0, false)
             } else {
-                binding.viewPager.setCurrentItem(binding.viewPager.adapter!!.count - 1, false)
+                binding.viewPager.setCurrentItem(binding.viewPager.adapter!!.itemCount - 1, false)
             }
         } else {
             stopSlideshow()
@@ -727,8 +755,12 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
 
     private fun stopSlideshow() {
         if (mIsSlideshowActive) {
-            binding.viewPager.setPageTransformer(false, DefaultPageTransformer())
+            binding.viewPager.setPageTransformer(null)
+            resetPageTransformations()
             mIsSlideshowActive = false
+            mIsSlideshowPaused = false
+            mSlideshowCountdownAnimator?.cancel()
+            hideSlideshowControls()
             showSystemUI()
             mSlideshowHandler.removeCallbacksAndMessages(null)
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -740,19 +772,169 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
         }
     }
 
+    // the fade transformer can leave a page half-faded when the slideshow is stopped mid-transition,
+    // ViewPager2 does not clear the view properties when the transformer is removed
+    private fun resetPageTransformations() {
+        for (i in 0 until binding.viewPager.childCount) {
+            val recyclerView = binding.viewPager.getChildAt(i) as? ViewGroup ?: continue
+            for (j in 0 until recyclerView.childCount) {
+                recyclerView.getChildAt(j).apply {
+                    translationX = 0f
+                    translationY = 0f
+                    alpha = 1f
+                }
+            }
+        }
+    }
+
     private fun scheduleSwipe() {
+        if (mIsSlideshowPaused) {
+            mIsSlideshowPaused = false
+            binding.slideshowControls.slideshowPlayPause.apply {
+                setImageResource(org.fossify.commons.R.drawable.ic_pause_outline_vector)
+                contentDescription = getString(R.string.slideshow_pause)
+            }
+        }
+
         mSlideshowHandler.removeCallbacksAndMessages(null)
         if (mIsSlideshowActive) {
             if (getCurrentMedium()!!.isImage() || getCurrentMedium()!!.isGIF() || getCurrentMedium()!!.isPortrait()) {
-                mSlideshowHandler.postDelayed({
-                    if (mIsSlideshowActive && !isDestroyed) {
-                        swipeToNextMedium()
-                    }
-                }, mSlideshowInterval * 1000L)
+                startSlideshowCountdown(mSlideshowInterval * 1000L)
             } else {
-                (getCurrentFragment() as? VideoFragment)!!.playVideo()
+                // mPos has to be used for the lookup: ViewPager2 only syncs currentItem when the
+                // scroll settles, so during a fake drag it still points at the previous page. The
+                // fragment may also still be binding after a media change, retry until it is ready.
+                binding.slideshowControls.slideshowProgressRing.beGone()
+                val videoFragment = (binding.viewPager.adapter as? MyPagerAdapter)?.getCurrentFragment(mPos) as? VideoFragment
+                if (videoFragment?.view != null) {
+                    videoFragment.playVideo()
+                } else {
+                    mSlideshowHandler.postDelayed({ if (mIsSlideshowActive && !isDestroyed) scheduleSwipe() }, 100)
+                }
             }
         }
+    }
+
+    private fun startSlideshowCountdown(delayMs: Long) {
+        val totalMs = (mSlideshowInterval * 1000L).coerceAtLeast(1L)
+        mNextSwipeAt = SystemClock.uptimeMillis() + delayMs
+        mSlideshowHandler.postDelayed({
+            if (mIsSlideshowActive && !isDestroyed) {
+                swipeToNextMedium()
+            }
+        }, delayMs)
+
+        // the progress ring fills up as the interval elapses
+        binding.slideshowControls.slideshowProgressRing.beVisible()
+        val fromProgress = ((totalMs - delayMs).coerceIn(0L, totalMs) * binding.slideshowControls.slideshowProgressRing.max / totalMs).toInt()
+        mSlideshowCountdownAnimator?.cancel()
+        mSlideshowCountdownAnimator = ValueAnimator.ofInt(fromProgress, binding.slideshowControls.slideshowProgressRing.max).apply {
+            duration = delayMs.coerceAtLeast(1L)
+            interpolator = LinearInterpolator()
+            addUpdateListener {
+                binding.slideshowControls.slideshowProgressRing.progress = it.animatedValue as Int
+            }
+            start()
+        }
+    }
+
+    private fun toggleSlideshowPause() {
+        if (mIsSlideshowPaused) {
+            resumeSlideshow()
+        } else {
+            pauseSlideshow()
+        }
+    }
+
+    private fun pauseSlideshow() {
+        mIsSlideshowPaused = true
+        mSlideshowPausedRemainingMs = (mNextSwipeAt - SystemClock.uptimeMillis()).coerceAtLeast(0L)
+        mSlideshowHandler.removeCallbacksAndMessages(null)
+        mSlideshowCountdownAnimator?.cancel()
+        (getCurrentFragment() as? VideoFragment)?.pauseVideo()
+        binding.slideshowControls.slideshowPlayPause.apply {
+            setImageResource(org.fossify.commons.R.drawable.ic_play_outline_vector)
+            contentDescription = getString(R.string.slideshow_resume)
+        }
+    }
+
+    private fun resumeSlideshow() {
+        mIsSlideshowPaused = false
+        binding.slideshowControls.slideshowPlayPause.apply {
+            setImageResource(org.fossify.commons.R.drawable.ic_pause_outline_vector)
+            contentDescription = getString(R.string.slideshow_pause)
+        }
+        val currentMedium = getCurrentMedium() ?: return
+        if (currentMedium.isImage() || currentMedium.isGIF() || currentMedium.isPortrait()) {
+            startSlideshowCountdown(mSlideshowPausedRemainingMs)
+        } else {
+            (getCurrentFragment() as? VideoFragment)?.playVideo()
+        }
+    }
+
+    private fun setupSlideshowControls() {
+        binding.slideshowControls.slideshowPlayPause.setOnClickListener { toggleSlideshowPause() }
+        binding.slideshowControls.slideshowStop.setOnClickListener { stopSlideshow() }
+    }
+
+    private fun showSlideshowControls() {
+        val playPause = binding.slideshowControls.slideshowPlayPause
+        if (mIsSlideshowPaused) {
+            playPause.setImageResource(org.fossify.commons.R.drawable.ic_play_outline_vector)
+            playPause.contentDescription = getString(R.string.slideshow_resume)
+        } else {
+            playPause.setImageResource(org.fossify.commons.R.drawable.ic_pause_outline_vector)
+            playPause.contentDescription = getString(R.string.slideshow_pause)
+        }
+
+        binding.slideshowControls.slideshowControlsHolder.removeCallbacks(mSlideshowControlsFadeRunnable)
+        binding.slideshowControls.slideshowControlsHolder.animate().cancel()
+        binding.slideshowControls.slideshowControlsHolder.alpha = 1f
+        binding.slideshowControls.slideshowControlsHolder.beVisible()
+        binding.slideshowControls.slideshowControlsHolder.postDelayed(mSlideshowControlsFadeRunnable, SLIDESHOW_CONTROLS_FADE_DELAY)
+        showSlideshowTopBar()
+    }
+
+    private fun hideSlideshowControls() {
+        binding.slideshowControls.slideshowControlsHolder.removeCallbacks(mSlideshowControlsFadeRunnable)
+        binding.slideshowControls.slideshowControlsHolder.animate().cancel()
+        binding.slideshowControls.slideshowControlsHolder.beGone()
+        binding.slideshowControls.slideshowControlsHolder.alpha = 1f
+        hideSlideshowTopBar()
+    }
+
+    // the bottom action bar stays hidden during a slideshow, it would overlap the controls pill
+    private fun showSlideshowTopBar() {
+        binding.mediumViewerAppbar.animate().alpha(1f).withStartAction {
+            binding.mediumViewerAppbar.beVisible()
+        }.start()
+        binding.topShadow.animate().alpha(1f).start()
+    }
+
+    private fun hideSlideshowTopBar() {
+        binding.mediumViewerAppbar.animate().alpha(0f).withEndAction {
+            binding.mediumViewerAppbar.beGone()
+        }.start()
+        binding.topShadow.animate().alpha(0f).start()
+    }
+
+    private fun toggleSlideshowControls() {
+        if (binding.slideshowControls.slideshowControlsHolder.isVisible()) {
+            binding.slideshowControls.slideshowControlsHolder.removeCallbacks(mSlideshowControlsFadeRunnable)
+            binding.slideshowControls.slideshowControlsHolder.animate().alpha(0f).withEndAction {
+                binding.slideshowControls.slideshowControlsHolder.beGone()
+            }.start()
+            hideSlideshowTopBar()
+        } else {
+            showSlideshowControls()
+        }
+    }
+
+    private val mSlideshowControlsFadeRunnable = Runnable {
+        binding.slideshowControls.slideshowControlsHolder.animate().alpha(0f).withEndAction {
+            binding.slideshowControls.slideshowControlsHolder.beGone()
+        }.start()
+        hideSlideshowTopBar()
     }
 
     private fun swipeToNextMedium() {
@@ -1447,6 +1629,13 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     }
 
     override fun fragmentClicked() {
+        // while a slideshow is running the tap only toggles the visibility of the slideshow
+        // controls, terminating it needs an explicit action (the stop button at the bottom)
+        if (mIsSlideshowActive) {
+            toggleSlideshowControls()
+            return
+        }
+
         mIsFullScreen = !mIsFullScreen
         checkSystemUI()
         fullscreenToggled()
@@ -1580,20 +1769,27 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
 
     private fun getCurrentPath() = getCurrentMedium()?.path ?: ""
 
-    override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {}
+    private val mOnPageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
+        override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {}
 
-    override fun onPageSelected(position: Int) {
+        override fun onPageSelected(position: Int) {
+            this@ViewPagerActivity.onPageSelected(position)
+        }
+
+        override fun onPageScrollStateChanged(state: Int) {
+            if (state == ViewPager2.SCROLL_STATE_IDLE && getCurrentMedium() != null) {
+                checkOrientation()
+            }
+        }
+    }
+
+    private fun onPageSelected(position: Int) {
         if (mPos != position) {
             mPos = position
             updateActionbarTitle()
             refreshMenuItems()
             scheduleSwipe()
-        }
-    }
-
-    override fun onPageScrollStateChanged(state: Int) {
-        if (state == ViewPager.SCROLL_STATE_IDLE && getCurrentMedium() != null) {
-            checkOrientation()
+            (binding.viewPager.adapter as? MyPagerAdapter)?.updateCurrentPosition(position)
         }
     }
 

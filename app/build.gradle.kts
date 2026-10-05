@@ -158,6 +158,7 @@ dependencies {
     implementation(libs.gestureviews)
     implementation(libs.subsamplingscaleimageview)
     implementation(libs.androidx.swiperefreshlayout)
+    implementation(libs.androidx.viewpager2)
     implementation(libs.awebp)
     implementation(libs.apng)
     implementation(libs.avif)

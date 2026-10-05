@@ -1,11 +1,16 @@
 package org.fossify.gallery.helpers
 
 import android.view.View
-import androidx.viewpager.widget.ViewPager
+import androidx.viewpager2.widget.ViewPager2
 
-class FadePageTransformer : ViewPager.PageTransformer {
+class FadePageTransformer(private val isVertical: Boolean = false) : ViewPager2.PageTransformer {
     override fun transformPage(view: View, position: Float) {
-        view.translationX = view.width * -position
+        // cancel the native page movement, so the pages fade in place
+        if (isVertical) {
+            view.translationY = view.height * -position
+        } else {
+            view.translationX = view.width * -position
+        }
 
         view.alpha = if (position <= -1f || position >= 1f) {
             0f

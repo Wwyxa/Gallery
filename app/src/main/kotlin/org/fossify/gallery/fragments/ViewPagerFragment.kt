@@ -3,6 +3,8 @@ package org.fossify.gallery.fragments
 import android.view.MotionEvent
 import androidx.fragment.app.Fragment
 import org.fossify.commons.extensions.*
+import org.fossify.gallery.R
+import org.fossify.gallery.activities.ViewPagerActivity
 import org.fossify.gallery.extensions.config
 import org.fossify.gallery.helpers.*
 import org.fossify.gallery.models.Medium
@@ -57,9 +59,23 @@ abstract class ViewPagerFragment : Fragment() {
                 val diffY = mTouchDownY - event.rawY
 
                 val downGestureDuration = System.currentTimeMillis() - mTouchDownTime
-                if (!mIgnoreCloseDown && (Math.abs(diffY) > Math.abs(diffX)) && (diffY < -mCloseDownThreshold) && downGestureDuration < MAX_CLOSE_DOWN_GESTURE_DURATION && context?.config?.allowDownGesture == true) {
-                    activity?.finish()
-                    activity?.overridePendingTransition(0, org.fossify.commons.R.anim.slide_down)
+                // with vertical swiping enabled the down gesture goes to the previous item, the
+                // view is then closed with a right swipe (a left swipe keeps doing nothing)
+                val currentActivity = activity
+                val isVerticalSwiping = currentActivity is ViewPagerActivity && currentActivity.config.swipeDirection == SWIPE_DIRECTION_VERTICAL
+                val isClosingGesture = if (isVerticalSwiping) {
+                    diffX < -mCloseDownThreshold && Math.abs(diffX) > Math.abs(diffY)
+                } else {
+                    Math.abs(diffY) > Math.abs(diffX) && diffY < -mCloseDownThreshold
+                }
+                if (!mIgnoreCloseDown && isClosingGesture && downGestureDuration < MAX_CLOSE_DOWN_GESTURE_DURATION && context?.config?.allowDownGesture == true) {
+                    val exitAnimation = if (isVerticalSwiping) {
+                        R.anim.slide_out_right
+                    } else {
+                        org.fossify.commons.R.anim.slide_down
+                    }
+                    currentActivity?.finish()
+                    currentActivity?.overridePendingTransition(0, exitAnimation)
                 }
                 mIgnoreCloseDown = false
             }

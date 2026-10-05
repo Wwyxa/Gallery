@@ -1,12 +1,8 @@
 package org.fossify.gallery.adapters
 
 import android.os.Bundle
-import android.os.Parcelable
-import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentManager
-import androidx.fragment.app.FragmentStatePagerAdapter
-import androidx.viewpager.widget.PagerAdapter
+import androidx.viewpager2.adapter.FragmentStateAdapter
 import org.fossify.gallery.activities.ViewPagerActivity
 import org.fossify.gallery.fragments.PhotoFragment
 import org.fossify.gallery.fragments.VideoFragment
@@ -15,56 +11,79 @@ import org.fossify.gallery.helpers.MEDIUM
 import org.fossify.gallery.helpers.SHOULD_INIT_FRAGMENT
 import org.fossify.gallery.models.Medium
 
-class MyPagerAdapter(val activity: ViewPagerActivity, fm: FragmentManager, val media: MutableList<Medium>) : FragmentStatePagerAdapter(fm) {
+class MyPagerAdapter(val activity: ViewPagerActivity, media: MutableList<Medium>) : FragmentStateAdapter(activity) {
+    var media: MutableList<Medium> = media
+        private set
+
+    // the list hash is mixed into the fragment ids, so any media change gives every fragment a new
+    // id and makes them all rebuild from scratch (like ViewPager1's POSITION_NONE did), while the
+    // ids stay stable across activity recreations, which lets the restored fragments be reused
+    private var itemIds = listOf<Long>()
+
+    private var currentPosition = -1
     private val fragments = HashMap<Int, ViewPagerFragment>()
-    var shouldInitFragment = true
 
-    override fun getCount() = media.size
+    init {
+        rebuildItemIds()
+    }
 
-    override fun getItem(position: Int): Fragment {
+    override fun getItemCount() = media.size
+
+    override fun getItemId(position: Int): Long = itemIds[position]
+
+    override fun containsItem(itemId: Long): Boolean = itemIds.contains(itemId)
+
+    override fun createFragment(position: Int): Fragment {
         val medium = media[position]
-        val bundle = Bundle()
-        bundle.putSerializable(MEDIUM, medium)
-        bundle.putBoolean(SHOULD_INIT_FRAGMENT, shouldInitFragment)
+        val bundle = Bundle().apply {
+            putSerializable(MEDIUM, medium)
+            putBoolean(SHOULD_INIT_FRAGMENT, true)
+        }
+
         val fragment = if (medium.isVideo()) {
             VideoFragment()
         } else {
             PhotoFragment()
         }
-
         fragment.arguments = bundle
-        return fragment
-    }
-
-    override fun getItemPosition(item: Any) = PagerAdapter.POSITION_NONE
-
-    override fun instantiateItem(container: ViewGroup, position: Int): Any {
-        val fragment = super.instantiateItem(container, position) as ViewPagerFragment
-
-        // getItem() might not be called if the activity is recreated, so the listener must be set here
         fragment.listener = activity
 
+        // ViewPager2 never calls setMenuVisibility on its own, emulate the ViewPager1 behavior
+        fragment.setMenuVisibility(position == currentPosition)
         fragments[position] = fragment
         return fragment
     }
 
-    override fun destroyItem(container: ViewGroup, position: Int, any: Any) {
-        fragments.remove(position)
-        super.destroyItem(container, position, any)
+    fun updateMedia(newMedia: MutableList<Medium>) {
+        media = newMedia
+        rebuildItemIds()
+        fragments.clear()
+        notifyDataSetChanged()
+
+        // reused fragments restored by the FragmentManager point at the old activity
+        activity.supportFragmentManager.fragments.forEach { (it as? ViewPagerFragment)?.listener = activity }
+    }
+
+    fun updateCurrentPosition(position: Int) {
+        currentPosition = position
+        for ((pos, fragment) in fragments) {
+            fragment.setMenuVisibility(pos == position)
+        }
     }
 
     fun getCurrentFragment(position: Int) = fragments[position]
 
     fun toggleFullscreen(isFullscreen: Boolean) {
         for ((pos, fragment) in fragments) {
-            fragment.fullscreenToggled(isFullscreen)
+            // the fragment view might not be created yet (or not anymore), its state is refreshed on view creation
+            if (fragment.view != null) {
+                fragment.fullscreenToggled(isFullscreen)
+            }
         }
     }
 
-    // try fixing TransactionTooLargeException crash on Android Nougat, tip from https://stackoverflow.com/a/43193425/1967672
-    override fun saveState(): Parcelable? {
-        val bundle = super.saveState() as Bundle?
-        bundle?.putParcelableArray("states", null)
-        return bundle
+    private fun rebuildItemIds() {
+        val listHash = media.hashCode().toLong()
+        itemIds = media.map { it.path.hashCode().toLong() xor listHash }
     }
 }

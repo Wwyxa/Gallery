@@ -13,8 +13,11 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import org.fossify.commons.extensions.onGlobalLayout
 import org.fossify.gallery.R
+import org.fossify.gallery.activities.ViewPagerActivity
 import org.fossify.gallery.extensions.audioManager
+import org.fossify.gallery.extensions.config
 import org.fossify.gallery.helpers.DRAG_THRESHOLD
+import org.fossify.gallery.helpers.SWIPE_DIRECTION_VERTICAL
 import kotlin.math.max
 
 // allow horizontal swipes through the layout, else it can cause glitches at zoomed in images
@@ -106,7 +109,9 @@ class MediaSideScroll(context: Context, attrs: AttributeSet) : RelativeLayout(co
                 val diffX = mTouchDownX - event.rawX
                 val diffY = mTouchDownY - event.rawY
 
-                if (Math.abs(diffY) > dragThreshold && Math.abs(diffY) > Math.abs(diffX)) {
+                // with vertical swiping enabled the ViewPagerActivity uses vertical drags for paging,
+                // so the brightness and volume control has to yield (like the down gesture close)
+                if (Math.abs(diffY) > dragThreshold && Math.abs(diffY) > Math.abs(diffX) && !isVerticalScrollDisabled()) {
                     onVerticalScroll?.invoke()
                     var percent = ((diffY / mViewHeight) * 100).toInt() * 3
                     percent = Math.min(100, Math.max(-100, percent))
@@ -140,6 +145,11 @@ class MediaSideScroll(context: Context, attrs: AttributeSet) : RelativeLayout(co
     }
 
     private fun getCurrentVolume() = activity?.audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
+
+    private fun isVerticalScrollDisabled(): Boolean {
+        val currentActivity = activity
+        return currentActivity is ViewPagerActivity && currentActivity.config.swipeDirection == SWIPE_DIRECTION_VERTICAL
+    }
 
     private fun getCurrentBrightness(): Int {
         return try {
