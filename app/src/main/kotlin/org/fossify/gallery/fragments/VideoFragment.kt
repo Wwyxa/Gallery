@@ -664,16 +664,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
     override fun fullscreenToggled(isFullscreen: Boolean) {
         mIsFullscreen = isFullscreen
 
-        mSeekBar.setOnSeekBarChangeListener(if (mIsFullscreen) null else this)
-        arrayOf(
-            binding.bottomVideoTimeHolder.videoCurrTime,
-            binding.bottomVideoTimeHolder.videoDuration,
-            binding.bottomVideoTimeHolder.videoTogglePlayPause,
-            binding.bottomVideoTimeHolder.videoPlaybackSpeed,
-            binding.bottomVideoTimeHolder.videoToggleMute
-        ).forEach {
-            it.isClickable = !mIsFullscreen
-        }
+        setVideoControlsInteractivity(!mIsFullscreen)
 
         if (isFullscreen) {
             mTimeHolder.fadeOut(DEFAULT_ANIMATION_DURATION)
@@ -689,6 +680,35 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
                     animate().alpha(if (isFullscreen) 0f else 1f).start()
                 }
             }
+        }
+    }
+
+    private fun setVideoControlsInteractivity(interactive: Boolean) {
+        mSeekBar.setOnSeekBarChangeListener(if (interactive) this else null)
+        arrayOf(
+            binding.bottomVideoTimeHolder.videoCurrTime,
+            binding.bottomVideoTimeHolder.videoDuration,
+            binding.bottomVideoTimeHolder.videoTogglePlayPause,
+            binding.bottomVideoTimeHolder.videoPlaybackSpeed,
+            binding.bottomVideoTimeHolder.videoToggleMute
+        ).forEach {
+            it.isClickable = interactive
+        }
+    }
+
+    // while a slideshow is running the page stays fullscreen, the video controls just follow the
+    // visibility of the slideshow pill; the margin lifts them above the pill so both fit
+    fun setVideoControlsVisible(visible: Boolean, bottomMargin: Int) {
+        mTimeHolder.updateLayoutParams<RelativeLayout.LayoutParams> {
+            this.bottomMargin = if (visible) bottomMargin else 0
+        }
+
+        setVideoControlsInteractivity(visible)
+        if (visible) {
+            mTimeHolder.beVisible()
+            mTimeHolder.fadeIn(DEFAULT_ANIMATION_DURATION)
+        } else {
+            mTimeHolder.fadeOut(DEFAULT_ANIMATION_DURATION)
         }
     }
 

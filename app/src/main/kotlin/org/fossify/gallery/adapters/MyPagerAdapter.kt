@@ -82,6 +82,14 @@ class MyPagerAdapter(val activity: ViewPagerActivity, media: MutableList<Medium>
         }
     }
 
+    fun setVideoControlsVisible(visible: Boolean, bottomMargin: Int) {
+        for ((pos, fragment) in fragments) {
+            if (fragment.view != null) {
+                (fragment as? VideoFragment)?.setVideoControlsVisible(visible, bottomMargin)
+            }
+        }
+    }
+
     private fun rebuildItemIds() {
         val listHash = media.hashCode().toLong()
         itemIds = media.map { it.path.hashCode().toLong() xor listHash }
