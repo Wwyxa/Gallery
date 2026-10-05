@@ -74,6 +74,7 @@ class SettingsActivity : SimpleActivity() {
         setupDarkBackground()
         setupScrollHorizontally()
         setupScreenRotation()
+        setupSwipeDirection()
         setupHideSystemUI()
         setupHiddenItemPasswordProtection()
         setupExcludedItemPasswordProtection()
@@ -677,6 +678,28 @@ class SettingsActivity : SimpleActivity() {
             ROTATE_BY_SYSTEM_SETTING -> R.string.screen_rotation_system_setting
             ROTATE_BY_DEVICE_ROTATION -> R.string.screen_rotation_device_rotation
             else -> R.string.screen_rotation_aspect_ratio
+        }
+    )
+
+    private fun setupSwipeDirection() {
+        binding.settingsSwipeDirection.text = getSwipeDirectionText()
+        binding.settingsSwipeDirectionHolder.setOnClickListener {
+            val items = arrayListOf(
+                RadioItem(SWIPE_DIRECTION_HORIZONTAL, getString(R.string.swipe_direction_horizontal)),
+                RadioItem(SWIPE_DIRECTION_VERTICAL, getString(R.string.swipe_direction_vertical))
+            )
+
+            RadioGroupDialog(this@SettingsActivity, items, config.swipeDirection) {
+                config.swipeDirection = it as Int
+                binding.settingsSwipeDirection.text = getSwipeDirectionText()
+            }
+        }
+    }
+
+    private fun getSwipeDirectionText() = getString(
+        when (config.swipeDirection) {
+            SWIPE_DIRECTION_VERTICAL -> R.string.swipe_direction_vertical
+            else -> R.string.swipe_direction_horizontal
         }
     )
 

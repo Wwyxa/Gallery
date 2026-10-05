@@ -205,6 +205,10 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getInt(SCREEN_ROTATION, ROTATE_BY_SYSTEM_SETTING)
         set(screenRotation) = prefs.edit().putInt(SCREEN_ROTATION, screenRotation).apply()
 
+    var swipeDirection: Int
+        get() = prefs.getInt(SWIPE_DIRECTION, SWIPE_DIRECTION_HORIZONTAL)
+        set(swipeDirection) = prefs.edit().putInt(SWIPE_DIRECTION, swipeDirection).apply()
+
     var fileLoadingPriority: Int
         get() = prefs.getInt(FILE_LOADING_PRIORITY, PRIORITY_SPEED)
         set(fileLoadingPriority) = prefs.edit().putInt(FILE_LOADING_PRIORITY, fileLoadingPriority).apply()
