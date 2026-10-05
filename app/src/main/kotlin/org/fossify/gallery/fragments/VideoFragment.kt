@@ -80,12 +80,14 @@ import org.fossify.gallery.extensions.getFriendlyMessage
 import org.fossify.gallery.extensions.launchGesturePlayer
 import org.fossify.gallery.extensions.parseFileChannel
 import org.fossify.gallery.helpers.Config
+import org.fossify.gallery.helpers.DRAG_THRESHOLD
 import org.fossify.gallery.helpers.EXOPLAYER_MAX_BUFFER_MS
 import org.fossify.gallery.helpers.EXOPLAYER_MIN_BUFFER_MS
 import org.fossify.gallery.helpers.FAST_FORWARD_VIDEO_MS
 import org.fossify.gallery.helpers.getMediumExtendedDetails
 import org.fossify.gallery.helpers.MEDIUM
 import org.fossify.gallery.helpers.SHOULD_INIT_FRAGMENT
+import org.fossify.gallery.helpers.SWIPE_DIRECTION_VERTICAL
 import org.fossify.gallery.interfaces.PlaybackSpeedListener
 import org.fossify.gallery.models.Medium
 import org.fossify.gallery.views.MediaSideScroll
@@ -93,12 +95,15 @@ import java.io.File
 import java.io.FileInputStream
 import java.text.DecimalFormat
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
     SeekBar.OnSeekBarChangeListener, PlaybackSpeedListener {
     companion object {
         private const val PROGRESS = "progress"
         private const val UPDATE_INTERVAL_MS = 250L
+        private const val PLAY_WHEN_READY_DRAG_DELAY = 100L
         private const val TOUCH_HOLD_DURATION_MS = 500L
         private const val TOUCH_HOLD_SPEED_MULTIPLIER = 2.0f
         private const val TOUCH_SLOP_DIVIDER = 3
@@ -123,6 +128,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
     private var mExoPlayer: ExoPlayer? = null
     private var mVideoSize = Point(1, 1)
     private var mTimerHandler = Handler()
+    private var mPlayWhenReadyHandler = Handler()
 
     private var mStoredShowExtendedDetails = false
     private var mStoredHideExtendedDetails = false
@@ -159,6 +165,11 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
     private var mTouchSlop = 0
     private var mInitialX = 0f
     private var mInitialY = 0f
+    private var mSeekTouchDownX = 0f
+    private var mSeekTouchDownY = 0f
+    private var mProgressAtDown = 0L
+    private var mDragThreshold = 0f
+    private var mScreenWidth = 0
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -172,6 +183,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
         mMedium = arguments.getSerializable(MEDIUM) as Medium
         mConfig = context.config
         mTouchSlop = (ViewConfiguration.get(context).scaledTouchSlop) / TOUCH_SLOP_DIVIDER
+        mDragThreshold = DRAG_THRESHOLD * context.resources.displayMetrics.density
         binding = PagerVideoItemBinding.inflate(inflater, container, false).apply {
             panoramaOutline.setOnClickListener { openPanorama() }
             bottomVideoTimeHolder.videoCurrTime.setOnClickListener { skip(false) }
@@ -253,6 +265,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
                     return@setOnTouchListener true
                 }
 
+                handleSeekEvent(event)
                 gestureDetector.onTouchEvent(event)
                 false
             }
@@ -939,6 +952,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
             mCurrTimeView.text = 0.getFormattedDuration()
             mSeekBar.progress = 0
             mTimerHandler.removeCallbacksAndMessages(null)
+            mPlayWhenReadyHandler.removeCallbacksAndMessages(null)
         }
     }
 
@@ -986,6 +1000,9 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
             }
             mTextureView.layoutParams = this
         }
+
+        val multiplier = if (screenWidth > screenHeight) 0.5 else 0.8
+        mScreenWidth = (screenWidth * multiplier).toInt()
     }
 
     private fun handleTouchHoldEvent(event: MotionEvent) {
@@ -1025,5 +1042,95 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
             mIsLongPressActive = false
             mPlaybackSpeedPill.fadeOut()
         }
+    }
+
+    // horizontal drag seek, active only in the viewer's vertical swiping mode where the horizontal
+    // axis is not used by the pager
+    private fun isSeekGestureEnabled(): Boolean {
+        val currentActivity = activity
+        return mConfig.allowVideoSeekGestures &&
+            currentActivity is ViewPagerActivity &&
+            currentActivity.config.swipeDirection == SWIPE_DIRECTION_VERTICAL
+    }
+
+    private fun handleSeekEvent(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                mSeekTouchDownX = event.rawX
+                mSeekTouchDownY = event.rawY
+                mProgressAtDown = mExoPlayer?.currentPosition ?: 0L
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                val diffX = event.rawX - mSeekTouchDownX
+                val diffY = event.rawY - mSeekTouchDownY
+
+                if (mExoPlayer != null && mScreenWidth > 0 && (mIsDragged || abs(diffX) > mDragThreshold &&
+                            abs(diffX) > abs(diffY) && isSeekGestureEnabled() &&
+                            binding.videoSurfaceFrame.controller.state.zoom == 1f)
+                ) {
+                    if (!mIsDragged) {
+                        // claim the gesture for the seek: ViewPager2 must not steal it on vertical drift
+                        mView.parent.requestDisallowInterceptTouchEvent(true)
+                        mIsDragged = true
+                        mTimeHolder.fadeIn()
+                        binding.videoSeekDeltaPill.fadeIn()
+                    }
+
+                    var percent = ((diffX / mScreenWidth) * 100).toInt()
+                    percent = min(100, max(-100, percent))
+
+                    val skipLength = mDuration * (percent.toDouble() / 100)
+                    var newProgress = mProgressAtDown + skipLength
+                    newProgress = newProgress.coerceIn(0.0, mExoPlayer!!.duration.toDouble())
+                    setPosition(newProgress.toLong())
+                    binding.videoSeekDeltaPill.text =
+                        formatSeekDelta(newProgress.toLong() - mProgressAtDown)
+                    resetPlayWhenReady()
+                }
+            }
+
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (mIsDragged) {
+                    binding.videoSeekDeltaPill.fadeOut()
+
+                    if (activity?.isFinishing == true) {
+                        // the activity got closed mid-drag (e.g. a back press): revert the position
+                        // so the remembered progress is not the one the seek landed on
+                        setPosition(mProgressAtDown)
+                        mPlayWhenReadyHandler.removeCallbacksAndMessages(null)
+                    } else {
+                        if (mIsFullscreen) {
+                            mTimeHolder.fadeOut()
+                        }
+
+                        if (!mIsPlaying) {
+                            mPlayWhenReadyHandler.removeCallbacksAndMessages(null)
+                        }
+                    }
+                }
+                mIsDragged = false
+            }
+        }
+    }
+
+    private fun formatSeekDelta(deltaMs: Long): String {
+        val sign = if (deltaMs < 0) "-" else "+"
+        val totalSeconds = abs(deltaMs) / 1000
+        return if (totalSeconds >= 60) {
+            "$sign${totalSeconds / 60}m${totalSeconds % 60}s"
+        } else {
+            "$sign${totalSeconds}s"
+        }
+    }
+
+    private fun resetPlayWhenReady() {
+        mExoPlayer?.playWhenReady = false
+        mPlayWhenReadyHandler.removeCallbacksAndMessages(null)
+        mPlayWhenReadyHandler.postDelayed({
+            if (mIsPlaying) {
+                mExoPlayer?.playWhenReady = true
+            }
+        }, PLAY_WHEN_READY_DRAG_DELAY)
     }
 }

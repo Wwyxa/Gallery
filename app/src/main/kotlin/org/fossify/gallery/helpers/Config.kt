@@ -337,6 +337,10 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getBoolean(ALLOW_VIDEO_GESTURES, true)
         set(allowVideoGestures) = prefs.edit().putBoolean(ALLOW_VIDEO_GESTURES, allowVideoGestures).apply()
 
+    var allowVideoSeekGestures: Boolean
+        get() = prefs.getBoolean(ALLOW_VIDEO_SEEK_GESTURES, true)
+        set(allowVideoSeekGestures) = prefs.edit().putBoolean(ALLOW_VIDEO_SEEK_GESTURES, allowVideoSeekGestures).apply()
+
     var slideshowInterval: Int
         get() = prefs.getInt(SLIDESHOW_INTERVAL, SLIDESHOW_DEFAULT_INTERVAL)
         set(slideshowInterval) = prefs.edit().putInt(SLIDESHOW_INTERVAL, slideshowInterval).apply()

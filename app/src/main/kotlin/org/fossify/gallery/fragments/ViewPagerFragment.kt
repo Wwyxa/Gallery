@@ -3,7 +3,6 @@ package org.fossify.gallery.fragments
 import android.view.MotionEvent
 import androidx.fragment.app.Fragment
 import org.fossify.commons.extensions.*
-import org.fossify.gallery.R
 import org.fossify.gallery.activities.ViewPagerActivity
 import org.fossify.gallery.extensions.config
 import org.fossify.gallery.helpers.*
@@ -59,23 +58,16 @@ abstract class ViewPagerFragment : Fragment() {
                 val diffY = mTouchDownY - event.rawY
 
                 val downGestureDuration = System.currentTimeMillis() - mTouchDownTime
-                // with vertical swiping enabled the down gesture goes to the previous item, the
-                // view is then closed with a right swipe (a left swipe keeps doing nothing)
+                // in the vertical swiping mode the horizontal axis belongs to the video seek (if
+                // enabled) and the view is exited with back only, so a swipe close exists only in
+                // the horizontal swiping mode (a down swipe)
                 val currentActivity = activity
                 val isVerticalSwiping = currentActivity is ViewPagerActivity && currentActivity.config.swipeDirection == SWIPE_DIRECTION_VERTICAL
-                val isClosingGesture = if (isVerticalSwiping) {
-                    diffX < -mCloseDownThreshold && Math.abs(diffX) > Math.abs(diffY)
-                } else {
+                val isClosingGesture = !isVerticalSwiping &&
                     Math.abs(diffY) > Math.abs(diffX) && diffY < -mCloseDownThreshold
-                }
                 if (!mIgnoreCloseDown && isClosingGesture && downGestureDuration < MAX_CLOSE_DOWN_GESTURE_DURATION && context?.config?.allowDownGesture == true) {
-                    val exitAnimation = if (isVerticalSwiping) {
-                        R.anim.slide_out_right
-                    } else {
-                        org.fossify.commons.R.anim.slide_down
-                    }
                     currentActivity?.finish()
-                    currentActivity?.overridePendingTransition(0, exitAnimation)
+                    currentActivity?.overridePendingTransition(0, org.fossify.commons.R.anim.slide_down)
                 }
                 mIgnoreCloseDown = false
             }
