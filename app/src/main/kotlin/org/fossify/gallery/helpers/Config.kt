@@ -213,6 +213,14 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getInt(FILE_LOADING_PRIORITY, PRIORITY_SPEED)
         set(fileLoadingPriority) = prefs.edit().putInt(FILE_LOADING_PRIORITY, fileLoadingPriority).apply()
 
+    var glideDiskCacheSizeMB: Int
+        get() = prefs.getInt(GLIDE_DISK_CACHE_SIZE, DEFAULT_GLIDE_DISK_CACHE_SIZE_MB)
+        set(glideDiskCacheSizeMB) = prefs.edit().putInt(GLIDE_DISK_CACHE_SIZE, glideDiskCacheSizeMB).apply()
+
+    var wasInternalGlideCacheCleared: Boolean
+        get() = prefs.getBoolean(WAS_INTERNAL_GLIDE_CACHE_CLEARED, false)
+        set(wasCleared) = prefs.edit().putBoolean(WAS_INTERNAL_GLIDE_CACHE_CLEARED, wasCleared).apply()
+
     var loopVideos: Boolean
         get() = prefs.getBoolean(LOOP_VIDEOS, false)
         set(loop) = prefs.edit().putBoolean(LOOP_VIDEOS, loop).apply()

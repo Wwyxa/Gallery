@@ -108,6 +108,7 @@ class SettingsActivity : SimpleActivity() {
         setupEmptyRecycleBin()
         updateTextColors(binding.settingsHolder)
         setupClearCache()
+        setupThumbnailCacheSize()
         setupExportFavorites()
         setupImportFavorites()
         setupExportSettings()
@@ -805,7 +806,7 @@ class SettingsActivity : SimpleActivity() {
 
     private fun setupClearCache() {
         ensureBackgroundThread {
-            val size = cacheDir.getProperSize(true).formatSize()
+            val size = getCacheSize().formatSize()
             runOnUiThread {
                 binding.settingsClearCacheSize.text = size
             }
@@ -814,12 +815,36 @@ class SettingsActivity : SimpleActivity() {
         binding.settingsClearCacheHolder.setOnClickListener {
             ensureBackgroundThread {
                 cacheDir.deleteRecursively()
+                externalCacheDir?.deleteRecursively()
                 runOnUiThread {
-                    binding.settingsClearCacheSize.text = cacheDir.getProperSize(true).formatSize()
+                    binding.settingsClearCacheSize.text = getCacheSize().formatSize()
                 }
             }
         }
     }
+
+    private fun getCacheSize() = cacheDir.getProperSize(true) + (externalCacheDir?.getProperSize(true) ?: 0L)
+
+    private fun setupThumbnailCacheSize() {
+        binding.settingsThumbnailCacheSizeValue.text = getThumbnailCacheSizeText()
+        binding.settingsThumbnailCacheSizeHolder.setOnClickListener {
+            val items = arrayListOf(
+                RadioItem(GLIDE_DISK_CACHE_250_MB, "250 MB"),
+                RadioItem(GLIDE_DISK_CACHE_512_MB, "512 MB"),
+                RadioItem(GLIDE_DISK_CACHE_1_GB, "1 GB"),
+                RadioItem(GLIDE_DISK_CACHE_2_GB, "2 GB"),
+                RadioItem(GLIDE_DISK_CACHE_4_GB, "4 GB")
+            )
+
+            RadioGroupDialog(this@SettingsActivity, items, config.glideDiskCacheSizeMB) {
+                config.glideDiskCacheSizeMB = it as Int
+                binding.settingsThumbnailCacheSizeValue.text = getThumbnailCacheSizeText()
+                toast(R.string.changes_apply_after_restart)
+            }
+        }
+    }
+
+    private fun getThumbnailCacheSizeText() = (config.glideDiskCacheSizeMB * MB_IN_BYTES).formatSize()
 
     private fun setupExportFavorites() {
         binding.settingsExportFavoritesHolder.setOnClickListener {
