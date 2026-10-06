@@ -9,6 +9,7 @@ import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.view.allViews
@@ -126,6 +127,10 @@ class MediaAdapter(
     private val isWaterfallView = !forceGridViewType && viewType == VIEW_TYPE_WATERFALL
     private val isMosaicView = !forceGridViewType && viewType == VIEW_TYPE_MOSAIC
     private val isRatioBasedView = isWaterfallView || isMosaicView
+
+    // the name overlay sits on top of the thumbnail, so in ratio based views it may take up
+    // at most this fraction of the thumbnail height, keeping short landscape items visible
+    private val maxNameOverlayFraction = 0.4f
 
     // per position aspect ratio based layout data, used by the mosaic view type
     private var mosaicSpanSizes = IntArray(0)
@@ -706,6 +711,7 @@ class MediaAdapter(
                 val size = getRatioBasedItemSize(medium, position, halfSpacing)
                 view.layoutParams?.height = size.y + halfSpacing * 2
                 overrideSize = size.takeIf { it.x > 0 && it.y > 0 }
+                mediumName.maxLines = getMaxNameLines(size.y, mediumName)
             } else {
                 val padding = if (config.thumbnailSpacing <= 1) {
                     config.thumbnailSpacing
@@ -841,6 +847,18 @@ class MediaAdapter(
     private fun getUsableWidth(): Int {
         val recyclerViewWidth = recyclerView.width
         return if (recyclerViewWidth > 0) recyclerViewWidth else recyclerView.resources.displayMetrics.widthPixels
+    }
+
+    // cap the name at how many lines fit into the overlay budget of the thumbnail height, at least one,
+    // so long names stop hiding most of short landscape items
+    private fun getMaxNameLines(thumbnailHeight: Int, name: TextView): Int {
+        val metrics = name.paint.fontMetrics
+        val lineHeight = metrics.bottom - metrics.top
+        if (lineHeight <= 0f || thumbnailHeight <= 0) {
+            return 3
+        }
+        val overlayBudget = thumbnailHeight * maxNameOverlayFraction - name.paddingBottom
+        return (overlayBudget / lineHeight).toInt().coerceIn(1, 3)
     }
 
     fun getMosaicSpanSize(position: Int) = mosaicSpanSizes.getOrNull(position)?.takeIf { it > 0 } ?: MOSAIC_TOTAL_SPANS
