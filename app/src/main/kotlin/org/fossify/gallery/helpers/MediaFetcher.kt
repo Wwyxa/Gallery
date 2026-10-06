@@ -28,6 +28,7 @@ import java.util.Locale
 
 class MediaFetcher(val context: Context) {
     var shouldStop = false
+    private var mStoredVideoDurations: HashMap<String, Int>? = null
 
     // on Android 11 we fetch all files at once from MediaStore and have it split by folder, use it if available
     fun getFilesFrom(
@@ -310,6 +311,7 @@ class MediaFetcher(val context: Context) {
         val dimensions = if (isRatioBasedViewType(config.getFolderViewType(folder))) getFolderDimensions(folder) else HashMap()
         val storedVideoDimensions = getStoredVideoDimensions()
         val videoDurations = if (getVideoDurations) getFolderDurations(folder) else HashMap()
+        val storedVideoDurations = getStoredVideoDurations()
 
         val files = when (folder) {
             FAVORITES -> favoritePaths.filter { showHidden || !it.contains("/.") }.map { File(it) }.toMutableList() as ArrayList<File>
@@ -400,9 +402,11 @@ class MediaFetcher(val context: Context) {
                 lastModified = newLastModified
 
                 var dateTaken = lastModified
-                val videoDuration = if (getVideoDurations && isVideo) {
-                    // fall back to opening the video itself when it is missing from MediaStore (hidden folders)
-                    videoDurations.remove(path) ?: (context.getDuration(path) ?: 0)
+                val videoDuration = if (isVideo) {
+                    // hidden folders are missing from MediaStore, never re-read the durations from the files
+                    videoDurations.remove(path)
+                        ?: storedVideoDurations[path]
+                        ?: if (getVideoDurations) (context.getDuration(path) ?: 0) else 0
                 } else {
                     0
                 }
@@ -939,6 +943,22 @@ class MediaFetcher(val context: Context) {
         } catch (ignored: Exception) {
             HashMap()
         }
+    }
+
+    // video durations persisted by an earlier fetch, they must not be read from the files again
+    private fun getStoredVideoDurations(): HashMap<String, Int> {
+        var durations = mStoredVideoDurations
+        if (durations == null) {
+            durations = try {
+                context.mediaDB.getVideoDurations(TYPE_VIDEOS)
+                    .associateTo(HashMap()) { it.path to it.duration }
+            } catch (ignored: Exception) {
+                HashMap()
+            }
+            mStoredVideoDurations = durations
+        }
+
+        return durations
     }
 
     fun sortMedia(media: ArrayList<Medium>, sorting: Int) {
