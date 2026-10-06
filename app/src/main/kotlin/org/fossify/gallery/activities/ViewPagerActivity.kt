@@ -1014,14 +1014,21 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
         val fileDirItems = arrayListOf(FileDirItem(currPath, currPath.getFilenameFromPath()))
         tryCopyMoveFilesTo(fileDirItems, isCopyOperation) {
             val newPath = "$it/${currPath.getFilenameFromPath()}"
-            rescanPaths(arrayListOf(newPath)) {
-                fixDateTaken(arrayListOf(newPath), false)
-            }
-
             config.tempFolderPath = ""
-            if (!isCopyOperation) {
-                refreshViewPager()
-                updateFavoritePaths(fileDirItems, it)
+            ensureBackgroundThread {
+                if (!isCopyOperation) {
+                    updateFavoritePaths(fileDirItems, it)
+                }
+
+                rescanPaths(arrayListOf(newPath)) {
+                    fixDateTaken(arrayListOf(newPath), false)
+                }
+
+                if (!isCopyOperation) {
+                    runOnUiThread {
+                        refreshViewPager()
+                    }
+                }
             }
         }
     }

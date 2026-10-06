@@ -602,12 +602,12 @@ fun BaseSimpleActivity.showRestoreConfirmationDialog(count: Int, callback: () ->
     }
 }
 
+// callers must run this on a background thread, before triggering any rescans of the affected folders:
+// the scans' stale-item cleanup deletes favorite entries whose file is no longer at the stored path
 fun BaseSimpleActivity.updateFavoritePaths(fileDirItems: ArrayList<FileDirItem>, destination: String) {
-    ensureBackgroundThread {
-        fileDirItems.forEach {
-            val newPath = "$destination/${it.name}"
-            updateDBMediaPath(it.path, newPath)
-        }
+    fileDirItems.forEach {
+        val newPath = "$destination/${it.name}"
+        updateDBMediaPath(it.path, newPath)
     }
 }
 
