@@ -523,17 +523,26 @@ class MediaAdapter(
         activity.tryCopyMoveFilesTo(fileDirItems, isCopyOperation) {
             val destinationPath = it
             config.tempFolderPath = ""
-            activity.applicationContext.rescanFolderMedia(destinationPath)
-            activity.applicationContext.rescanFolderMedia(fileDirItems.first().getParentPath())
+            ensureBackgroundThread {
+                if (!isCopyOperation) {
+                    // the favorite/media DB rows must be renamed before the rescans below start,
+                    // or their stale-item cleanup wipes the favorite state of the moved files
+                    activity.updateFavoritePaths(fileDirItems, destinationPath)
+                }
 
-            val newPaths = fileDirItems.map { "$destinationPath/${it.name}" }.toMutableList() as ArrayList<String>
-            activity.rescanPaths(newPaths) {
-                activity.fixDateTaken(newPaths, false)
-            }
+                activity.applicationContext.rescanFolderMedia(destinationPath)
+                activity.applicationContext.rescanFolderMedia(fileDirItems.first().getParentPath())
 
-            if (!isCopyOperation) {
-                listener?.refreshItems()
-                activity.updateFavoritePaths(fileDirItems, destinationPath)
+                val newPaths = fileDirItems.map { "$destinationPath/${it.name}" }.toMutableList() as ArrayList<String>
+                activity.rescanPaths(newPaths) {
+                    activity.fixDateTaken(newPaths, false)
+                }
+
+                if (!isCopyOperation) {
+                    activity.runOnUiThread {
+                        listener?.refreshItems()
+                    }
+                }
             }
         }
     }
