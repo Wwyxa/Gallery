@@ -23,6 +23,7 @@ import org.fossify.gallery.helpers.IS_FROM_SEARCH
 import org.fossify.gallery.helpers.MOSAIC_TOTAL_SPANS
 import org.fossify.gallery.helpers.MediaFetcher
 import org.fossify.gallery.helpers.PATH
+import org.fossify.gallery.helpers.SEARCH_KEYWORD
 import org.fossify.gallery.helpers.SHOW_ALL
 import org.fossify.gallery.helpers.VIDEO_PLAYER_APP
 import org.fossify.gallery.helpers.VIDEO_PLAYER_SYSTEM
@@ -46,7 +47,8 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
-        mLastSearchedText = intent.getStringExtra(CURRENT_SEARCH_QUERY).orEmpty()
+        mLastSearchedText = intent.getStringExtra(CURRENT_SEARCH_QUERY)
+            ?: intent.data?.getQueryParameter(SEARCH_KEYWORD).orEmpty()
         setupOptionsMenu()
         setupEdgeToEdge(
             padTopSystem = listOf(binding.searchMenu),
@@ -55,6 +57,20 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
         binding.searchEmptyTextPlaceholder.setTextColor(getProperTextColor())
         getAllMedia()
         binding.searchFastscroller.updateColors(getProperPrimaryColor())
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val keyword = intent.data?.getQueryParameter(SEARCH_KEYWORD).orEmpty()
+        if (keyword.isNotEmpty()) {
+            mLastSearchedText = keyword
+            binding.searchMenu.binding.topToolbarSearch.apply {
+                setText(keyword)
+                setSelection(keyword.length)
+            }
+            // setting an identical text does not fire the text watcher, re-run the search explicitly
+            textChanged(keyword)
+        }
     }
 
     override fun onResume() {
