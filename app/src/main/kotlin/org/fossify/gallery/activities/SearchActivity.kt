@@ -83,6 +83,16 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
         mCurrAsyncTask?.stopFetching()
     }
 
+    override fun onBackPressedCompat(): Boolean {
+        if (isTaskRoot) {
+            // deep links can start this activity as the task root, back should reopen the main screen instead of exiting
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+            return true
+        }
+        return false
+    }
+
     private fun setupOptionsMenu() {
         // the query must be set before setupMenu attaches the text watcher, otherwise it would
         // trigger a search against the not yet loaded media
@@ -102,7 +112,8 @@ class SearchActivity : SimpleActivity(), MediaOperationsListener {
 
         binding.searchMenu.onNavigateBackClickListener = {
             if (binding.searchMenu.getCurrentQuery().isEmpty()) {
-                finish()
+                // route through the back callback so the task-root case above applies too
+                onBackPressedDispatcher.onBackPressed()
             } else {
                 binding.searchMenu.closeSearch()
             }
