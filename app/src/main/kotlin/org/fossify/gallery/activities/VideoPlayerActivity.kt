@@ -80,7 +80,6 @@ import org.fossify.gallery.fragments.PlaybackSpeedFragment
 import org.fossify.gallery.helpers.DRAG_THRESHOLD
 import org.fossify.gallery.helpers.EXOPLAYER_MAX_BUFFER_MS
 import org.fossify.gallery.helpers.EXOPLAYER_MIN_BUFFER_MS
-import org.fossify.gallery.helpers.FAST_FORWARD_VIDEO_MS
 import org.fossify.gallery.helpers.GO_TO_NEXT_ITEM
 import org.fossify.gallery.helpers.GO_TO_PREV_ITEM
 import org.fossify.gallery.helpers.HIDE_SYSTEM_UI_DELAY
@@ -126,6 +125,7 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
     private var mVideoSize = Point(0, 0)
     private var mTimerHandler = Handler()
     private var mPlayWhenReadyHandler = Handler()
+    private val mHideSeekDeltaRunnable = Runnable { binding.videoSeekDeltaPill.fadeOut() }
 
     private var mIgnoreCloseDown = false
     private var mTouchSlop = 0
@@ -191,6 +191,7 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
 
     override fun onDestroy() {
         super.onDestroy()
+        mTimerHandler.removeCallbacks(mHideSeekDeltaRunnable)
         if (!isChangingConfigurations) {
             pauseVideo()
             binding.bottomVideoTimeHolder.videoCurrTime.text = 0.getFormattedDuration()
@@ -339,7 +340,7 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
                     toggleFullscreen()
                 },
                 doubleTap = { x, y ->
-                    doSkip(false)
+                    skipFromDoubleTap(false)
                 })
 
             binding.videoVolumeController.initialize(
@@ -351,7 +352,7 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
                     toggleFullscreen()
                 },
                 doubleTap = { x, y ->
-                    doSkip(true)
+                    skipFromDoubleTap(true)
                 })
         } else {
             binding.videoBrightnessController.beGone()
@@ -487,10 +488,14 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
     }
 
     private fun handleDoubleTap(x: Float) {
-        val instantWidth = mScreenWidth / 7
+        val viewWidth = binding.videoSurfaceFrame.width
+        val instantWidth = viewWidth * 0.3f
+        val viewLocation = IntArray(2)
+        binding.videoSurfaceFrame.getLocationOnScreen(viewLocation)
+        val localX = x - viewLocation[0]
         when {
-            x <= instantWidth -> doSkip(false)
-            x >= mScreenWidth - instantWidth -> doSkip(true)
+            localX < instantWidth -> skipFromDoubleTap(false)
+            localX > viewWidth - instantWidth -> skipFromDoubleTap(true)
             else -> togglePlayPause()
         }
     }
@@ -740,16 +745,31 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
         })
     }
 
+    private fun skipFromDoubleTap(forward: Boolean) {
+        if (config.allowVideoDoubleTapSeek) {
+            doSkip(forward)
+        } else {
+            togglePlayPause()
+        }
+    }
+
     private fun doSkip(forward: Boolean) {
         if (mExoPlayer == null) {
             return
         }
 
         val curr = mExoPlayer!!.currentPosition
+        val skipMs = config.videoSkipSeconds * 1000L
         var newPosition =
-            if (forward) curr + FAST_FORWARD_VIDEO_MS else curr - FAST_FORWARD_VIDEO_MS
-        newPosition = newPosition.coerceIn(0, mExoPlayer!!.duration)
+            if (forward) curr + skipMs else curr - skipMs
+        newPosition = newPosition.coerceIn(0, maxOf(mExoPlayer!!.duration, 0))
         setPosition(newPosition)
+        val deltaMs = newPosition - curr
+        val sign = if (deltaMs < 0) "-" else "+"
+        mTimerHandler.removeCallbacks(mHideSeekDeltaRunnable)
+        binding.videoSeekDeltaPill.text = "$sign${kotlin.math.abs(deltaMs) / 1000}s"
+        binding.videoSeekDeltaPill.fadeIn()
+        mTimerHandler.postDelayed(mHideSeekDeltaRunnable, 1000L)
     }
 
     private fun handleEvent(event: MotionEvent) {

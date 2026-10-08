@@ -349,6 +349,14 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getBoolean(ALLOW_VIDEO_SEEK_GESTURES, true)
         set(allowVideoSeekGestures) = prefs.edit().putBoolean(ALLOW_VIDEO_SEEK_GESTURES, allowVideoSeekGestures).apply()
 
+    var videoSkipSeconds: Int
+        get() = prefs.getInt(VIDEO_SKIP_SECONDS, 10).takeIf { it in listOf(5, 10, 15, 30, 60) } ?: 10
+        set(value) = prefs.edit().putInt(VIDEO_SKIP_SECONDS, value.takeIf { it in listOf(5, 10, 15, 30, 60) } ?: 10).apply()
+
+    var allowVideoDoubleTapSeek: Boolean
+        get() = prefs.getBoolean(ALLOW_VIDEO_DOUBLE_TAP_SEEK, true)
+        set(value) = prefs.edit().putBoolean(ALLOW_VIDEO_DOUBLE_TAP_SEEK, value).apply()
+
     var slideshowInterval: Int
         get() = prefs.getInt(SLIDESHOW_INTERVAL, SLIDESHOW_DEFAULT_INTERVAL)
         set(slideshowInterval) = prefs.edit().putInt(SLIDESHOW_INTERVAL, slideshowInterval).apply()

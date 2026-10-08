@@ -83,7 +83,6 @@ import org.fossify.gallery.helpers.Config
 import org.fossify.gallery.helpers.DRAG_THRESHOLD
 import org.fossify.gallery.helpers.EXOPLAYER_MAX_BUFFER_MS
 import org.fossify.gallery.helpers.EXOPLAYER_MIN_BUFFER_MS
-import org.fossify.gallery.helpers.FAST_FORWARD_VIDEO_MS
 import org.fossify.gallery.helpers.getMediumExtendedDetails
 import org.fossify.gallery.helpers.MEDIUM
 import org.fossify.gallery.helpers.SHOULD_INIT_FRAGMENT
@@ -129,6 +128,12 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
     private var mVideoSize = Point(1, 1)
     private var mTimerHandler = Handler()
     private var mPlayWhenReadyHandler = Handler()
+    private val mHideSeekDeltaRunnable = Runnable {
+        binding.videoSeekDeltaPill.fadeOut()
+        if (mIsFullscreen && !mIsDragged) {
+            mTimeHolder.fadeOut()
+        }
+    }
 
     private var mStoredShowExtendedDetails = false
     private var mStoredHideExtendedDetails = false
@@ -345,7 +350,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
                         }
                     },
                     doubleTap = { x, y ->
-                        doSkip(false)
+                        skipFromDoubleTap(false)
                     })
                 mVolumeSideScroll.initialize(
                     activity,
@@ -360,7 +365,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
                         }
                     },
                     doubleTap = { x, y ->
-                        doSkip(true)
+                        skipFromDoubleTap(true)
                     })
 
                 videoSurface.onGlobalLayout {
@@ -407,6 +412,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
 
     override fun onDestroy() {
         super.onDestroy()
+        mTimerHandler.removeCallbacks(mHideSeekDeltaRunnable)
         if (activity?.isChangingConfigurations == false) {
             cleanup()
         }
@@ -611,10 +617,13 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
 
     private fun handleDoubleTap(x: Float) {
         val viewWidth = mView.width
-        val instantWidth = viewWidth / 7
+        val instantWidth = viewWidth * 0.3f
+        val viewLocation = IntArray(2)
+        mView.getLocationOnScreen(viewLocation)
+        val localX = x - viewLocation[0]
         when {
-            x <= instantWidth -> doSkip(false)
-            x >= viewWidth - instantWidth -> doSkip(true)
+            localX < instantWidth -> skipFromDoubleTap(false)
+            localX > viewWidth - instantWidth -> skipFromDoubleTap(true)
             else -> togglePlayPause()
         }
     }
@@ -752,16 +761,30 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
         doSkip(forward)
     }
 
+    private fun skipFromDoubleTap(forward: Boolean) {
+        if (mConfig.allowVideoDoubleTapSeek) {
+            doSkip(forward)
+        } else {
+            togglePlayPause()
+        }
+    }
+
     private fun doSkip(forward: Boolean) {
         if (mExoPlayer == null) {
             return
         }
 
         val curr = mExoPlayer!!.currentPosition
+        val skipMs = mConfig.videoSkipSeconds * 1000L
         var newPosition =
-            if (forward) curr + FAST_FORWARD_VIDEO_MS else curr - FAST_FORWARD_VIDEO_MS
+            if (forward) curr + skipMs else curr - skipMs
         newPosition = newPosition.coerceIn(0, maxOf(mExoPlayer!!.duration, 0))
         setPosition(newPosition)
+        mTimerHandler.removeCallbacks(mHideSeekDeltaRunnable)
+        mTimeHolder.fadeIn()
+        binding.videoSeekDeltaPill.text = formatSeekDelta(newPosition - curr)
+        binding.videoSeekDeltaPill.fadeIn()
+        mTimerHandler.postDelayed(mHideSeekDeltaRunnable, 1000L)
     }
 
     override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
@@ -1090,6 +1113,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
                             binding.videoSurfaceFrame.controller.state.zoom == 1f)
                 ) {
                     if (!mIsDragged) {
+                        mTimerHandler.removeCallbacks(mHideSeekDeltaRunnable)
                         // claim the gesture for the seek: ViewPager2 must not steal it on vertical drift
                         mView.parent.requestDisallowInterceptTouchEvent(true)
                         mIsDragged = true

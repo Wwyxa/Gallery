@@ -350,6 +350,44 @@
 
             </RelativeLayout>
 
+            <RelativeLayout
+                android:id="@+id/settings_allow_video_double_tap_seek_holder"
+                style="@style/SettingsHolderSwitchStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <org.fossify.commons.views.MyMaterialSwitch
+                    android:id="@+id/settings_allow_video_double_tap_seek"
+                    style="@style/SettingsSwitchStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/allow_video_double_tap_seek" />
+
+            </RelativeLayout>
+
+            <RelativeLayout
+                android:id="@+id/settings_video_skip_interval_holder"
+                style="@style/SettingsHolderTextViewStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <org.fossify.commons.views.MyTextView
+                    android:id="@+id/settings_video_skip_interval_label"
+                    style="@style/SettingsTextLabelStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/video_skip_interval" />
+
+                <org.fossify.commons.views.MyTextView
+                    android:id="@+id/settings_video_skip_interval"
+                    style="@style/SettingsTextValueStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/settings_video_skip_interval_label"
+                    tools:text="10 s" />
+
+            </RelativeLayout>
+
             <include
                 android:id="@+id/settings_videos_divider"
                 layout="@layout/divider" />
