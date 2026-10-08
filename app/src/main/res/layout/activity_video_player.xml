@@ -114,4 +114,19 @@
             app:navigationIcon="@drawable/ic_arrow_left_vector" />
 
     </com.google.android.material.appbar.AppBarLayout>
+
+    <TextView
+        android:id="@+id/video_seek_delta_pill"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@id/bottom_video_time_holder"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="@dimen/big_margin"
+        android:alpha="0"
+        android:background="@drawable/seek_delta_pill_background"
+        android:gravity="center"
+        android:paddingHorizontal="@dimen/activity_margin"
+        android:paddingVertical="@dimen/medium_margin"
+        android:textColor="@android:color/white"
+        android:textSize="@dimen/bigger_text_size" />
 </RelativeLayout>

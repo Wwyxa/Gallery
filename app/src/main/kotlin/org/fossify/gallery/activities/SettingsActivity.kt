@@ -85,6 +85,8 @@ class SettingsActivity : SimpleActivity() {
         setupAllowPhotoGestures()
         setupAllowVideoGestures()
         setupAllowVideoSeekGestures()
+        setupVideoSkipInterval()
+        setupAllowVideoDoubleTapSeek()
         setupAllowDownGesture()
         setupAllowRotatingWithGestures()
         setupShowNotch()
@@ -518,6 +520,27 @@ class SettingsActivity : SimpleActivity() {
         binding.settingsAllowVideoSeekGesturesHolder.setOnClickListener {
             binding.settingsAllowVideoSeekGestures.toggle()
             config.allowVideoSeekGestures = binding.settingsAllowVideoSeekGestures.isChecked
+        }
+    }
+
+    private fun setupVideoSkipInterval() {
+        binding.settingsVideoSkipInterval.text = getString(R.string.video_skip_seconds, config.videoSkipSeconds)
+        binding.settingsVideoSkipIntervalHolder.setOnClickListener {
+            val items = arrayListOf(5, 10, 15, 30, 60).map {
+                RadioItem(it, getString(R.string.video_skip_seconds, it))
+            }
+            RadioGroupDialog(this, ArrayList(items), config.videoSkipSeconds) {
+                config.videoSkipSeconds = it as Int
+                binding.settingsVideoSkipInterval.text = getString(R.string.video_skip_seconds, config.videoSkipSeconds)
+            }
+        }
+    }
+
+    private fun setupAllowVideoDoubleTapSeek() {
+        binding.settingsAllowVideoDoubleTapSeek.isChecked = config.allowVideoDoubleTapSeek
+        binding.settingsAllowVideoDoubleTapSeekHolder.setOnClickListener {
+            binding.settingsAllowVideoDoubleTapSeek.toggle()
+            config.allowVideoDoubleTapSeek = binding.settingsAllowVideoDoubleTapSeek.isChecked
         }
     }
 
@@ -979,6 +1002,8 @@ class SettingsActivity : SimpleActivity() {
                 put(GESTURE_VIDEO_PLAYER, config.gestureVideoPlayer)
                 put(VIDEO_PLAYER_TYPE, config.videoPlayerType)
                 put(ALLOW_VIDEO_GESTURES, config.allowVideoGestures)
+                put(VIDEO_SKIP_SECONDS, config.videoSkipSeconds)
+                put(ALLOW_VIDEO_DOUBLE_TAP_SEEK, config.allowVideoDoubleTapSeek)
                 put(ANIMATE_GIFS, config.animateGifs)
                 put(CROP_THUMBNAILS, config.cropThumbnails)
                 put(SHOW_THUMBNAIL_VIDEO_DURATION, config.showThumbnailVideoDuration)
@@ -1125,6 +1150,8 @@ class SettingsActivity : SimpleActivity() {
                 GESTURE_VIDEO_PLAYER -> config.gestureVideoPlayer = value.toBoolean()
                 VIDEO_PLAYER_TYPE -> config.videoPlayerType = value.toInt()
                 ALLOW_VIDEO_GESTURES -> config.allowVideoGestures = value.toBoolean()
+                VIDEO_SKIP_SECONDS -> config.videoSkipSeconds = value.toInt()
+                ALLOW_VIDEO_DOUBLE_TAP_SEEK -> config.allowVideoDoubleTapSeek = value.toBoolean()
                 ANIMATE_GIFS -> config.animateGifs = value.toBoolean()
                 CROP_THUMBNAILS -> config.cropThumbnails = value.toBoolean()
                 SHOW_THUMBNAIL_VIDEO_DURATION -> config.showThumbnailVideoDuration = value.toBoolean()
