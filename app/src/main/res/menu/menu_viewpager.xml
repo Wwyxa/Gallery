@@ -46,6 +46,10 @@
         android:title="@string/rename"
         app:showAsAction="never" />
     <item
+        android:id="@+id/menu_change_file_time"
+        android:title="@string/file_time_title"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/menu_hide"
         android:icon="@drawable/ic_hide_vector"
         android:title="@string/hide"

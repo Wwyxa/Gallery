@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="file_time_title">修改文件时间</string>
+    <string name="file_time_title_count">修改文件时间（%1$d 项）</string>
+    <string name="file_time_mode">修改方式</string>
+    <string name="file_time_start">日期与时间</string>
+    <string name="file_time_date">日期</string>
+    <string name="file_time_time">时间</string>
+    <string name="file_time_change_date">修改日期</string>
+    <string name="file_time_change_time">修改时间</string>
+    <string name="file_time_pick_date">选择日期</string>
+    <string name="file_time_pick_time">选择时间</string>
+    <string name="file_time_direction">偏移方向</string>
+    <string name="file_time_days">天</string>
+    <string name="file_time_hours">小时</string>
+    <string name="file_time_minutes">分钟</string>
+    <string name="file_time_seconds">秒</string>
+    <string name="file_time_order">排列顺序</string>
+    <string name="file_time_preview">预览</string>
+    <string name="file_time_apply">应用</string>
+    <string name="file_time_invalid">请为选中的修改项输入有效日期时间（yyyy-MM-dd HH:mm:ss），并填写范围内的非负间隔。</string>
+    <string name="file_time_permission">未获得修改权限</string>
+    <string name="file_time_missing">文件不存在或无法访问</string>
+    <string name="file_time_changed">文件在预览后发生变化，请重新打开修改界面。</string>
+    <string name="file_time_write_failed">此存储位置不允许修改文件时间</string>
+    <string name="file_time_verify_failed">实际文件时间与目标时间不一致</string>
+    <string name="file_time_result">成功：%1$d\n失败：%2$d\n未处理：%3$d</string>
+    <string name="file_time_failures">失败详情</string>
+    <string name="file_time_retry">重试失败文件</string>
+    <string name="file_time_scan_pending">文件时间已修改，但相册索引尚未完全刷新，请稍后刷新相册。</string>
+    <string-array name="file_time_modes"><item>统一设置</item><item>整体偏移</item><item>按顺序递增</item></string-array>
+    <string-array name="file_time_directions"><item>延后</item><item>提前</item></string-array>
+    <string-array name="file_time_orders"><item>当前列表顺序</item><item>文件名升序</item><item>文件名降序</item><item>原修改时间升序</item><item>原修改时间降序</item></string-array>
+</resources>
