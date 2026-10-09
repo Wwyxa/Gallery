@@ -2,6 +2,21 @@
 
     <style name="AppTheme" parent="AppTheme.Base" />
 
+    <style name="FileTimePickerTheme" parent="">
+        <item name="android:datePickerStyle">@style/FileTimeDatePicker</item>
+        <item name="android:timePickerStyle">@style/FileTimeTimePicker</item>
+    </style>
+
+    <style name="FileTimeDatePicker" parent="@android:style/Widget.Material.DatePicker">
+        <item name="android:datePickerMode">spinner</item>
+        <item name="android:calendarViewShown">false</item>
+        <item name="android:spinnersShown">true</item>
+    </style>
+
+    <style name="FileTimeTimePicker" parent="@android:style/Widget.Material.TimePicker">
+        <item name="android:timePickerMode">spinner</item>
+    </style>
+
     <style name="CustomBottomSheetDialogTheme" parent="Theme.Design.Light.BottomSheetDialog">
         <item name="bottomSheetStyle">@style/CustomBottomSheetStyle</item>
     </style>

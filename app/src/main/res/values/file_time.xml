@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="file_time_title">Change file time</string>
+    <string name="file_time_title_count">Change file time (%1$d)</string>
+    <string name="file_time_mode">Mode</string>
+    <string name="file_time_start">Date and time</string>
+    <string name="file_time_date">Date</string>
+    <string name="file_time_time">Time</string>
+    <string name="file_time_change_date">Change date</string>
+    <string name="file_time_change_time">Change time</string>
+    <string name="file_time_pick_date">Choose date</string>
+    <string name="file_time_pick_time">Choose time</string>
+    <string name="file_time_direction">Direction</string>
+    <string name="file_time_days">Days</string>
+    <string name="file_time_hours">Hours</string>
+    <string name="file_time_minutes">Minutes</string>
+    <string name="file_time_seconds">Seconds</string>
+    <string name="file_time_order">Order</string>
+    <string name="file_time_preview">Preview</string>
+    <string name="file_time_apply">Apply</string>
+    <string name="file_time_invalid">Enter a valid date and time (yyyy-MM-dd HH:mm:ss) for the selected components, and use a nonnegative interval within range.</string>
+    <string name="file_time_permission">Permission denied</string>
+    <string name="file_time_missing">File is missing or inaccessible</string>
+    <string name="file_time_changed">File changed after preview. Open the editor again.</string>
+    <string name="file_time_write_failed">Storage does not allow changing this file time</string>
+    <string name="file_time_verify_failed">The stored file time does not match the requested time</string>
+    <string name="file_time_result">Successful: %1$d\nFailed: %2$d\nNot processed: %3$d</string>
+    <string name="file_time_failures">Failures</string>
+    <string name="file_time_retry">Retry failed files</string>
+    <string name="file_time_scan_pending">Files were updated, but the gallery index has not fully refreshed. Refresh the gallery later.</string>
+    <string-array name="file_time_modes">
+        <item>Set date or time</item><item>Shift time</item><item>Increase in sequence</item>
+    </string-array>
+    <string-array name="file_time_directions"><item>Later</item><item>Earlier</item></string-array>
+    <string-array name="file_time_orders">
+        <item>Current list order</item><item>Filename ascending</item><item>Filename descending</item><item>File time ascending</item><item>File time descending</item>
+    </string-array>
+</resources>

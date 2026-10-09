@@ -234,6 +234,7 @@ class MediaAdapter(
             findItem(R.id.cab_rename).isVisible = !isInRecycleBin
             findItem(R.id.cab_add_to_favorites).isVisible = !isInRecycleBin
             findItem(R.id.cab_fix_date_taken).isVisible = !isInRecycleBin
+            findItem(R.id.cab_change_file_time).isVisible = !isInRecycleBin
             findItem(R.id.cab_move_to).isVisible = !isInRecycleBin
             findItem(R.id.cab_open_with).isVisible = isOneItemSelected
             findItem(R.id.cab_edit).isVisible = isOneItemSelected
@@ -273,6 +274,13 @@ class MediaAdapter(
             R.id.cab_select_all -> selectAll()
             R.id.cab_open_with -> openPath()
             R.id.cab_fix_date_taken -> fixDateTaken()
+            R.id.cab_change_file_time -> org.fossify.gallery.dialogs.ChangeFileTimeDialog(
+                activity,
+                media.filterIsInstance<Medium>().filter { selectedKeys.contains(it.path.hashCode()) }.map { it.path }
+            ) {
+                listener?.refreshItems()
+                finishActMode()
+            }
             R.id.cab_set_as -> setAs()
             R.id.cab_resize -> resize()
             R.id.cab_delete -> checkDeleteConfirmation()

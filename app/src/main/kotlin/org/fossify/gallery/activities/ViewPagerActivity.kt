@@ -324,6 +324,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
                 findItem(R.id.menu_share).isVisible = visibleBottomActions and BOTTOM_ACTION_SHARE == 0
                 findItem(R.id.menu_edit).isVisible = visibleBottomActions and BOTTOM_ACTION_EDIT == 0 && !currentMedium.isSVG()
                 findItem(R.id.menu_rename).isVisible = visibleBottomActions and BOTTOM_ACTION_RENAME == 0 && !currentMedium.getIsInRecycleBin()
+                findItem(R.id.menu_change_file_time).isVisible = !currentMedium.getIsInRecycleBin()
                 findItem(R.id.menu_rotate).isVisible = currentMedium.isImage() && visibleBottomActions and BOTTOM_ACTION_ROTATE == 0
                 findItem(R.id.menu_set_as).isVisible = visibleBottomActions and BOTTOM_ACTION_SET_AS == 0
                 findItem(R.id.menu_copy_to_clipboard).isVisible = currentMedium.isImage()
@@ -379,6 +380,10 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
                 R.id.menu_share -> shareMediumPath(getCurrentPath())
                 R.id.menu_delete -> checkDeleteConfirmation()
                 R.id.menu_rename -> checkMediaManagementAndRename()
+                R.id.menu_change_file_time -> org.fossify.gallery.dialogs.ChangeFileTimeDialog(this, listOf(getCurrentPath())) {
+                    getCurrentMedium()?.modified = java.io.File(getCurrentPath()).lastModified()
+                    refreshMenuItems()
+                }
                 R.id.menu_print -> printFile()
                 R.id.menu_edit -> openEditor(getCurrentPath())
                 R.id.menu_properties -> showProperties()
