@@ -78,6 +78,7 @@ import org.fossify.commons.views.MyRecyclerView
 import org.fossify.gallery.BuildConfig
 import org.fossify.gallery.R
 import org.fossify.gallery.adapters.DirectoryAdapter
+import org.fossify.gallery.asynctasks.GetMediaAsynctask
 import org.fossify.gallery.databases.GalleryDatabase
 import org.fossify.gallery.databinding.ActivityMainBinding
 import org.fossify.gallery.dialogs.ChangeSortingDialog
@@ -125,15 +126,18 @@ import org.fossify.gallery.helpers.GROUP_DESCENDING
 import org.fossify.gallery.helpers.LOCATION_INTERNAL
 import org.fossify.gallery.helpers.MAX_COLUMN_COUNT
 import org.fossify.gallery.helpers.MONTH_MILLISECONDS
+import org.fossify.gallery.helpers.PATH
 import org.fossify.gallery.helpers.MediaFetcher
 import org.fossify.gallery.helpers.PICKED_PATHS
 import org.fossify.gallery.helpers.RECYCLE_BIN
 import org.fossify.gallery.helpers.SET_WALLPAPER_INTENT
 import org.fossify.gallery.helpers.SHOW_ALL
 import org.fossify.gallery.helpers.SHOW_TEMP_HIDDEN_DURATION
+import org.fossify.gallery.helpers.SHUFFLE_PLAY
 import org.fossify.gallery.helpers.SKIP_AUTHENTICATION
 import org.fossify.gallery.helpers.TYPE_GIFS
 import org.fossify.gallery.helpers.TYPE_IMAGES
+import org.fossify.gallery.helpers.TYPE_PORTRAITS
 import org.fossify.gallery.helpers.TYPE_RAWS
 import org.fossify.gallery.helpers.TYPE_SVGS
 import org.fossify.gallery.helpers.TYPE_VIDEOS
@@ -188,6 +192,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     private var mTempShowHiddenHandler = Handler()
     private var mZoomListener: MyRecyclerView.MyZoomListener? = null
     private var mLastMediaFetcher: MediaFetcher? = null
+    private var mIsShuffleLoading = false
     private var mDirs = ArrayList<Directory>()
     private var mDirsIgnoringSearch = ArrayList<Directory>()
 
@@ -268,6 +273,10 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
 
         binding.directoriesSwitchSearching.setOnClickListener {
             launchSearchActivity()
+        }
+
+        binding.shufflePlayHolder.setOnClickListener {
+            startShufflePlay()
         }
 
         // just request the permission, tryLoadGallery will then trigger in onResume
@@ -685,6 +694,85 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 hideKeyboard()
                 startActivity(this)
                 finish()
+            }
+        }
+    }
+
+    private fun startShufflePlay() {
+        if (mIsShuffleLoading) {
+            return
+        }
+
+        mIsShuffleLoading = true
+        binding.directoriesRefreshLayout.isRefreshing = true
+
+        ensureBackgroundThread {
+            // a lean shuffle loader: two plain queries instead of getCachedMedia("")'s general
+            // purpose flow (per folder queries, grouping, sorting, portrait folder listings), the
+            // list is about to be shuffled so only the filters matter. The directory table holds
+            // the folders the app already validated as visible, no fresh MediaStore scan needed
+            val folderSet = directoryDB.getAll()
+                .filter {
+                    it.path != RECYCLE_BIN && it.path != FAVORITES && !config.isFolderProtected(it.path)
+                }
+                .map { it.path.lowercase() }
+                .toHashSet()
+
+            val allMedia = mediaDB.getAllMedia()
+            // keep img_ subfolders of scanned folders too, that is where portrait media live
+            val portraitFolders = allMedia.asSequence().map { it.parentPath }.distinct()
+                .filter { parent -> folderSet.any { parent.startsWith("$it/img_", ignoreCase = true) } }
+                .map { it.lowercase() }
+                .toHashSet()
+            val validFolders = folderSet + portraitFolders
+
+            val shouldShowHidden = config.shouldShowHidden
+            val filterMedia = config.filterMedia
+            val mediumList = allMedia.asSequence()
+                .filter { it.parentPath.lowercase() in validFolders }
+                .filter { shouldShowHidden || !it.path.contains("/.") }
+                .filter {
+                    (filterMedia and TYPE_IMAGES != 0 && it.type == TYPE_IMAGES)
+                        || (filterMedia and TYPE_VIDEOS != 0 && it.type == TYPE_VIDEOS)
+                        || (filterMedia and TYPE_GIFS != 0 && it.type == TYPE_GIFS)
+                        || (filterMedia and TYPE_RAWS != 0 && it.type == TYPE_RAWS)
+                        || (filterMedia and TYPE_SVGS != 0 && it.type == TYPE_SVGS)
+                        || (filterMedia and TYPE_PORTRAITS != 0 && it.type == TYPE_PORTRAITS)
+                }
+                .shuffled()
+                .toCollection(ArrayList())
+
+            if (mediumList.isEmpty()) {
+                // the cache has not been filled yet, scan the storage the slow way as a fallback
+                runOnUiThread {
+                    GetMediaAsynctask(applicationContext, "", showAll = true) { media ->
+                        launchShufflePlay(media.filterIsInstance<Medium>())
+                    }.execute()
+                }
+            } else {
+                launchShufflePlay(mediumList)
+            }
+        }
+    }
+
+    private fun launchShufflePlay(mediumList: List<Medium>) {
+        // cached rows can be stale, make sure the first item really exists so the viewer does
+        // not open on a broken tile; later items are left alone, stale ones just show an error
+        val first = mediumList.firstOrNull { getDoesFilePathExist(it.path) }
+
+        runOnUiThread {
+            mIsShuffleLoading = false
+            binding.directoriesRefreshLayout.isRefreshing = false
+            if (first == null) {
+                toast(org.fossify.commons.R.string.no_items_found)
+                return@runOnUiThread
+            }
+
+            ViewPagerActivity.shuffleMedia = ArrayList(mediumList)
+            Intent(this, ViewPagerActivity::class.java).apply {
+                putExtra(PATH, first.path)
+                putExtra(SHUFFLE_PLAY, true)
+                startActivity(this)
             }
         }
     }
@@ -1470,6 +1558,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
 
         binding.directoriesEmptyPlaceholder2.underlineText()
         binding.directoriesFastscroller.beVisibleIf(binding.directoriesEmptyPlaceholder.isGone())
+        binding.shufflePlayHolder.beVisibleIf(dirs.isNotEmpty() && !mIsThirdPartyIntent)
     }
 
     private fun setupAdapter(

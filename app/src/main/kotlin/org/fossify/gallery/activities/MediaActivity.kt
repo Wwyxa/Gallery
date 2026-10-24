@@ -106,6 +106,7 @@ import org.fossify.gallery.helpers.SHOW_ALL
 import org.fossify.gallery.helpers.SHOW_FAVORITES
 import org.fossify.gallery.helpers.SHOW_RECYCLE_BIN
 import org.fossify.gallery.helpers.SHOW_TEMP_HIDDEN_DURATION
+import org.fossify.gallery.helpers.SHUFFLE_PLAY
 import org.fossify.gallery.helpers.SKIP_AUTHENTICATION
 import org.fossify.gallery.helpers.SLIDESHOW_START_ON_ENTER
 import org.fossify.gallery.helpers.VIDEO_PLAYER_APP
@@ -194,6 +195,10 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             showFilterMediaDialog()
         }
 
+        binding.shufflePlayHolder.setOnClickListener {
+            startShufflePlay()
+        }
+
         updateWidgets()
     }
 
@@ -254,6 +259,9 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         binding.mediaEmptyTextPlaceholder.setTextColor(getProperTextColor())
         binding.mediaEmptyTextPlaceholder2.setTextColor(getProperPrimaryColor())
         binding.mediaEmptyTextPlaceholder2.bringToFront()
+        // hidden until the current folder finishes loading, mMedia is a static and could still
+        // hold the previous screen's media before that
+        binding.shufflePlayHolder.beVisibleIf(mLoadedInitialPhotos && mMedia.isNotEmpty() && !isThirdPartyIntent())
 
         // do not refresh Random sorted files after opening a fullscreen image and going Back
         val isRandomSorting = config.getFolderSorting(mPath) and SORT_BY_RANDOM != 0
@@ -995,6 +1003,9 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
 
     private fun isSetWallpaperIntent() = intent.getBooleanExtra(SET_WALLPAPER_INTENT, false)
 
+    private fun isThirdPartyIntent() =
+        mIsGetImageIntent || mIsGetVideoIntent || mIsGetAnyIntent || isSetWallpaperIntent()
+
     private fun itemClicked(path: String) {
         hideKeyboard()
         if (isSetWallpaperIntent()) {
@@ -1047,6 +1058,26 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         }
     }
 
+    private fun startShufflePlay() {
+        val mediumList = mMedia.filterIsInstanceTo(ArrayList<Medium>())
+        if (mediumList.isEmpty()) {
+            toast(org.fossify.commons.R.string.no_items_found)
+            return
+        }
+
+        ViewPagerActivity.shuffleMedia = mediumList.shuffled().toCollection(ArrayList())
+        Intent(this, ViewPagerActivity::class.java).apply {
+            putExtra(SKIP_AUTHENTICATION, shouldSkipAuthentication())
+            putExtra(PATH, ViewPagerActivity.shuffleMedia.first().path)
+            putExtra(SHOW_ALL, mShowAll)
+            putExtra(SHOW_FAVORITES, mPath == FAVORITES)
+            putExtra(SHOW_RECYCLE_BIN, mPath == RECYCLE_BIN)
+            putExtra(IS_FROM_GALLERY, true)
+            putExtra(SHUFFLE_PLAY, true)
+            startActivity(this)
+        }
+    }
+
     private fun openInViewPager(path: String) {
         if (mLastSearchedText.isNotEmpty()) {
             ViewPagerActivity.searchMedia = getMediaAdapter()?.media?.filterIsInstanceTo(ArrayList<Medium>()) ?: ArrayList()
@@ -1090,6 +1121,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
                 binding.mediaEmptyTextPlaceholder.text = getString(R.string.no_media_with_filters)
             }
             binding.mediaFastscroller.beVisibleIf(binding.mediaEmptyTextPlaceholder.isGone())
+            binding.shufflePlayHolder.beVisibleIf(media.isNotEmpty() && !isThirdPartyIntent())
             setupAdapter()
         }
 

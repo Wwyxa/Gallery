@@ -151,6 +151,9 @@
     <string name="slideshow_resume">Resume the slideshow</string>
     <string name="slideshow_stop">Stop the slideshow</string>
 
+    <!-- Shuffle play -->
+    <string name="shuffle_play">Shuffle play</string>
+
     <!-- View types -->
     <string name="group_direct_subfolders">Group direct subfolders</string>
 

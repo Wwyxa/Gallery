@@ -168,6 +168,7 @@ import org.fossify.gallery.helpers.SHOW_FAVORITES
 import org.fossify.gallery.helpers.SHOW_NEXT_ITEM
 import org.fossify.gallery.helpers.SHOW_PREV_ITEM
 import org.fossify.gallery.helpers.SHOW_RECYCLE_BIN
+import org.fossify.gallery.helpers.SHUFFLE_PLAY
 import org.fossify.gallery.helpers.SKIP_AUTHENTICATION
 import org.fossify.gallery.helpers.SLIDESHOW_ANIMATION_FADE
 import org.fossify.gallery.helpers.SLIDESHOW_ANIMATION_NONE
@@ -201,6 +202,11 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
         // swiping stays inside the results; kept outside the intent because a result set can be
         // too large for a transaction, it is only read when IS_FROM_SEARCH is set
         var searchMedia = ArrayList<Medium>()
+
+        // the shuffled all-media list handed over by the home screen shuffle play button, so
+        // swiping walks one fixed random order; same handoff rules as searchMedia, it is only
+        // read when SHUFFLE_PLAY is set
+        var shuffleMedia = ArrayList<Medium>()
     }
 
     private var mPath = ""
@@ -226,6 +232,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
 
     private var mMediaFiles = ArrayList<Medium>()
     private var mIsFromSearch = false
+    private var mIsShufflePlay = false
     private var mFavoritePaths = ArrayList<String>()
     private var mIgnoredPaths = ArrayList<String>()
     private var mOriginalBrightness: Float? = null
@@ -252,12 +259,14 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
         window.decorView.setBackgroundColor(getProperBackgroundColor())
         // search results replace the last visited folder's list as the swipe scope, they also
         // make the viewer skip the folder refetch; an empty list means the process was recreated
-        // and the results are gone, the viewer then falls back to the regular folder behavior
+        // and the results are gone, the viewer then falls back to the regular folder behavior.
+        // shuffle play hands over its list the same way
         mIsFromSearch = intent.getBooleanExtra(IS_FROM_SEARCH, false) && searchMedia.isNotEmpty()
-        if (mIsFromSearch) {
-            mMediaFiles.addAll(searchMedia)
-        } else {
-            (MediaActivity.mMedia.clone() as ArrayList<ThumbnailItem>).filterIsInstanceTo(mMediaFiles, Medium::class.java)
+        mIsShufflePlay = intent.getBooleanExtra(SHUFFLE_PLAY, false) && shuffleMedia.isNotEmpty()
+        when {
+            mIsShufflePlay -> mMediaFiles.addAll(shuffleMedia)
+            mIsFromSearch -> mMediaFiles.addAll(searchMedia)
+            else -> (MediaActivity.mMedia.clone() as ArrayList<ThumbnailItem>).filterIsInstanceTo(mMediaFiles, Medium::class.java)
         }
 
         requestMediaPermissions {
@@ -544,7 +553,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
             gotMedia(mMediaFiles as ArrayList<ThumbnailItem>, refetchViewPagerPosition = true)
         }
 
-        if (!mIsFromSearch) {
+        if (!mIsFromSearch && !mIsShufflePlay) {
             refreshViewPager(true)
         }
         binding.viewPager.offscreenPageLimit = 2
@@ -614,7 +623,8 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
     }
 
     private fun updateSwipeDirection() {
-        binding.viewPager.orientation = if (config.swipeDirection == SWIPE_DIRECTION_VERTICAL) {
+        // shuffle play always pages vertically, regardless of the general swipe direction setting
+        binding.viewPager.orientation = if (mIsShufflePlay || config.swipeDirection == SWIPE_DIRECTION_VERTICAL) {
             ViewPager2.ORIENTATION_VERTICAL
         } else {
             ViewPager2.ORIENTATION_HORIZONTAL
@@ -1557,9 +1567,10 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
     }
 
     private fun refreshViewPager(refetchPosition: Boolean = false) {
-        if (mIsFromSearch) {
-            // the pager list is the handed-over search results, there is no folder to refetch,
-            // re-emitting the current list lets the position be resolved against it again
+        if (mIsFromSearch || mIsShufflePlay) {
+            // the pager list is the handed-over search results or shuffled list, there is no
+            // folder to refetch, re-emitting the current list lets the position be resolved
+            // against it again
             gotMedia(mMediaFiles.clone() as ArrayList<ThumbnailItem>, refetchViewPagerPosition = refetchPosition)
             return
         }
