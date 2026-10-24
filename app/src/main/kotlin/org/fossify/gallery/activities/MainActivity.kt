@@ -103,6 +103,8 @@ import org.fossify.gallery.extensions.getSortedDirectories
 import org.fossify.gallery.extensions.handleExcludedFolderPasswordProtection
 import org.fossify.gallery.extensions.handleMediaManagementPrompt
 import org.fossify.gallery.extensions.isDownloadsFolder
+import org.fossify.gallery.extensions.isThisOrParentExcluded
+import org.fossify.gallery.extensions.isThisOrParentIncluded
 import org.fossify.gallery.extensions.launchAbout
 import org.fossify.gallery.extensions.launchCamera
 import org.fossify.gallery.extensions.launchSettings
@@ -725,9 +727,21 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             // purpose flow (per folder queries, grouping, sorting, portrait folder listings), the
             // list is about to be shuffled so only the filters matter. The directory table holds
             // the folders the app already validated as visible, no fresh MediaStore scan needed
+            // exclusion is applied at read time everywhere else (getCachedDirectories,
+            // getFoldersToScan), directoryDB keeps the stale rows of excluded folders
+            val excludedFolders = if (config.temporarilyShowExcluded) {
+                HashSet()
+            } else {
+                config.excludedFolders
+            }
+            // include beats exclude like in shouldFolderBeVisible: an included folder stays
+            // visible even under an excluded parent, dropping it here would empty the list
+            // and trigger the slow full rescan fallback
+            val includedFolders = config.includedFolders
             val folderSet = directoryDB.getAll()
                 .filter {
                     it.path != RECYCLE_BIN && it.path != FAVORITES && !config.isFolderProtected(it.path)
+                        && (it.path.isThisOrParentIncluded(includedFolders) || !it.path.isThisOrParentExcluded(excludedFolders))
                 }
                 .map { it.path.lowercase() }
                 .toHashSet()
