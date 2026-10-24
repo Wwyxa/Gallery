@@ -5,6 +5,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.Handler
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import android.widget.RelativeLayout
 import androidx.core.net.toUri
@@ -101,6 +103,7 @@ import org.fossify.gallery.helpers.MediaFetcher
 import org.fossify.gallery.helpers.PATH
 import org.fossify.gallery.helpers.PICKED_PATHS
 import org.fossify.gallery.helpers.RECYCLE_BIN
+import org.fossify.gallery.helpers.SCROLL_JUMP_DRAG_THRESHOLD_DP
 import org.fossify.gallery.helpers.SET_WALLPAPER_INTENT
 import org.fossify.gallery.helpers.SHOW_ALL
 import org.fossify.gallery.helpers.SHOW_FAVORITES
@@ -133,6 +136,9 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     private var mAllowPickingMultiple = false
     private var mShowAll = false
     private var mLoadedInitialPhotos = false
+    private var mJumpTouchStartY = 0f
+    private var mJumpTouchFired = false
+    private var mJumpIconRes = 0
     private var mShowLoadingIndicator = true
     private var mWasFullscreenViewOpen = false
     private var mLastSearchedText = ""
@@ -199,6 +205,14 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             startShufflePlay()
         }
 
+        setupScrollJumpButton()
+
+        binding.mediaGrid.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                updateScrollJumpButton()
+            }
+        })
+
         updateWidgets()
     }
 
@@ -262,6 +276,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         // hidden until the current folder finishes loading, mMedia is a static and could still
         // hold the previous screen's media before that
         binding.shufflePlayHolder.beVisibleIf(mLoadedInitialPhotos && mMedia.isNotEmpty() && !isThirdPartyIntent())
+        updateScrollJumpButton()
 
         // do not refresh Random sorted files after opening a fullscreen image and going Back
         val isRandomSorting = config.getFolderSorting(mPath) and SORT_BY_RANDOM != 0
@@ -548,6 +563,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         }
 
         setupScrollDirection()
+        updateScrollJumpButton()
     }
 
     private fun setupScrollDirection() {
@@ -1078,6 +1094,126 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         }
     }
 
+    private fun updateScrollJumpButton() {
+        // read the scroll state after the pending layout pass, a freshly set adapter would
+        // still report nothing to scroll and keep the button hidden until the first scroll
+        binding.mediaGrid.post {
+            val isVertical = when (val layoutManager = binding.mediaGrid.layoutManager) {
+                is MyGridLayoutManager -> layoutManager.orientation == RecyclerView.VERTICAL
+                is StaggeredGridLayoutManager -> layoutManager.orientation == RecyclerView.VERTICAL
+                else -> false
+            }
+            val canScrollUp = isVertical && binding.mediaGrid.canScrollVertically(-1)
+            val canScrollDown = isVertical && binding.mediaGrid.canScrollVertically(1)
+            binding.scrollJumpHolder.beVisibleIf((canScrollUp || canScrollDown) && !isThirdPartyIntent())
+        }
+    }
+
+    private fun setupScrollJumpButton() {
+        // a tap without a drag jumps contextually: back to the top, or to the bottom when
+        // already at the top. Dragging past the threshold jumps right away in that direction
+        binding.scrollJumpHolder.setOnClickListener {
+            scrollMediaToEdge(toTop = binding.mediaGrid.canScrollVertically(-1))
+        }
+        binding.scrollJumpHolder.setOnTouchListener { view, event ->
+            handleScrollJumpTouch(view, event)
+        }
+    }
+
+    private fun handleScrollJumpTouch(view: View, event: MotionEvent): Boolean {
+        val threshold = SCROLL_JUMP_DRAG_THRESHOLD_DP * resources.displayMetrics.density
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                mJumpTouchStartY = event.y
+                mJumpTouchFired = false
+                (view.parent as? ViewGroup)?.requestDisallowInterceptTouchEvent(true)
+                setScrollJumpIcon(R.drawable.ic_scroll_jump_vector)
+            }
+            MotionEvent.ACTION_MOVE -> handleScrollJumpMove(threshold, event)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (event.actionMasked == MotionEvent.ACTION_UP && !mJumpTouchFired) {
+                    view.performClick()
+                }
+                setScrollJumpIcon(R.drawable.ic_scroll_jump_vector)
+            }
+        }
+        return true
+    }
+
+    private fun handleScrollJumpMove(threshold: Float, event: MotionEvent) {
+        if (mJumpTouchFired) {
+            return
+        }
+
+        val dy = event.y - mJumpTouchStartY
+        val toTop = when {
+            dy <= -threshold -> true
+            dy >= threshold -> false
+            else -> return
+        }
+
+        mJumpTouchFired = true
+        val directionIcon = if (toTop) {
+            R.drawable.ic_scroll_top_vector
+        } else {
+            R.drawable.ic_scroll_bottom_vector
+        }
+        setScrollJumpIcon(directionIcon)
+        scrollMediaToEdge(toTop = toTop)
+    }
+
+    private fun setScrollJumpIcon(res: Int) {
+        if (res != mJumpIconRes) {
+            mJumpIconRes = res
+            binding.scrollJumpIcon.setImageResource(res)
+        }
+    }
+
+    private fun scrollMediaToEdge(toTop: Boolean) {
+        val itemCount = binding.mediaGrid.adapter?.itemCount ?: 0
+        if (itemCount == 0) {
+            return
+        }
+
+        when (val layoutManager = binding.mediaGrid.layoutManager) {
+            is MyGridLayoutManager -> {
+                if (toTop) {
+                    layoutManager.scrollToPositionWithOffset(0, 0)
+                } else {
+                    // anchor one screen above the end so the last screen renders full, like a
+                    // fastscroller drag all the way down does
+                    val firstVisible = layoutManager.findFirstVisibleItemPosition()
+                    val visibleCount = layoutManager.findLastVisibleItemPosition() - firstVisible + 1
+                    layoutManager.scrollToPositionWithOffset((itemCount - visibleCount).coerceAtLeast(0), 0)
+                    finishScrollToRealBottom()
+                }
+            }
+            is StaggeredGridLayoutManager -> {
+                if (toTop) {
+                    layoutManager.scrollToPosition(0)
+                } else {
+                    val first = IntArray(layoutManager.spanCount)
+                    val last = IntArray(layoutManager.spanCount)
+                    layoutManager.findFirstVisibleItemPositions(first)
+                    layoutManager.findLastVisibleItemPositions(last)
+                    val visibleCount = (last.max() - first.min() + 1).coerceAtLeast(1)
+                    layoutManager.scrollToPosition((itemCount - visibleCount).coerceAtLeast(0))
+                    finishScrollToRealBottom()
+                }
+            }
+        }
+    }
+
+    // the anchored jump above can land a row or two short of the end, the measured visible span
+    // slightly overshoots the real screen capacity. scrollBy clamps at the list's actual scroll
+    // range, so this extra step always parks it flush with the bottom, no matter how the
+    // anchored layout landed
+    private fun finishScrollToRealBottom() {
+        binding.mediaGrid.post {
+            binding.mediaGrid.scrollBy(0, binding.mediaGrid.height)
+        }
+    }
+
     private fun openInViewPager(path: String) {
         if (mLastSearchedText.isNotEmpty()) {
             ViewPagerActivity.searchMedia = getMediaAdapter()?.media?.filterIsInstanceTo(ArrayList<Medium>()) ?: ArrayList()
@@ -1122,6 +1258,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             }
             binding.mediaFastscroller.beVisibleIf(binding.mediaEmptyTextPlaceholder.isGone())
             binding.shufflePlayHolder.beVisibleIf(media.isNotEmpty() && !isThirdPartyIntent())
+            updateScrollJumpButton()
             setupAdapter()
         }
 

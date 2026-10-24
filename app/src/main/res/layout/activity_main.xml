@@ -79,6 +79,30 @@
     </RelativeLayout>
 
     <FrameLayout
+        android:id="@+id/scroll_jump_holder"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="@dimen/activity_margin"
+        android:layout_marginBottom="94dp"
+        android:alpha="0.8"
+        android:background="@drawable/shuffle_play_background"
+        android:clickable="true"
+        android:contentDescription="@string/scroll_to_top_or_bottom"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/scroll_jump_icon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_scroll_jump_vector"
+            app:tint="#FFFFFF" />
+    </FrameLayout>
+
+    <FrameLayout
         android:id="@+id/shuffle_play_holder"
         android:layout_width="52dp"
         android:layout_height="52dp"

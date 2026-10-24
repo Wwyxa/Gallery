@@ -8,6 +8,8 @@ import android.os.Handler
 import android.provider.MediaStore
 import android.provider.MediaStore.Images
 import android.provider.MediaStore.Video
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import android.widget.RelativeLayout
 import android.widget.Toast
@@ -130,6 +132,7 @@ import org.fossify.gallery.helpers.PATH
 import org.fossify.gallery.helpers.MediaFetcher
 import org.fossify.gallery.helpers.PICKED_PATHS
 import org.fossify.gallery.helpers.RECYCLE_BIN
+import org.fossify.gallery.helpers.SCROLL_JUMP_DRAG_THRESHOLD_DP
 import org.fossify.gallery.helpers.SET_WALLPAPER_INTENT
 import org.fossify.gallery.helpers.SHOW_ALL
 import org.fossify.gallery.helpers.SHOW_TEMP_HIDDEN_DURATION
@@ -193,6 +196,9 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     private var mZoomListener: MyRecyclerView.MyZoomListener? = null
     private var mLastMediaFetcher: MediaFetcher? = null
     private var mIsShuffleLoading = false
+    private var mJumpTouchStartY = 0f
+    private var mJumpTouchFired = false
+    private var mJumpIconRes = 0
     private var mDirs = ArrayList<Directory>()
     private var mDirsIgnoringSearch = ArrayList<Directory>()
 
@@ -278,6 +284,14 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         binding.shufflePlayHolder.setOnClickListener {
             startShufflePlay()
         }
+
+        setupScrollJumpButton()
+
+        binding.directoriesGrid.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                updateScrollJumpButton()
+            }
+        })
 
         // just request the permission, tryLoadGallery will then trigger in onResume
         handleMediaPermissions()
@@ -774,6 +788,108 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 putExtra(SHUFFLE_PLAY, true)
                 startActivity(this)
             }
+        }
+    }
+
+    private fun updateScrollJumpButton() {
+        // read the scroll state after the pending layout pass, a freshly set adapter would
+        // still report nothing to scroll and keep the button hidden until the first scroll
+        binding.directoriesGrid.post {
+            val layoutManager = binding.directoriesGrid.layoutManager as? MyGridLayoutManager
+            val isVertical = layoutManager != null && layoutManager.orientation == RecyclerView.VERTICAL
+            val canScrollUp = isVertical && binding.directoriesGrid.canScrollVertically(-1)
+            val canScrollDown = isVertical && binding.directoriesGrid.canScrollVertically(1)
+            binding.scrollJumpHolder.beVisibleIf((canScrollUp || canScrollDown) && !mIsThirdPartyIntent)
+        }
+    }
+
+    private fun setupScrollJumpButton() {
+        // a tap without a drag jumps contextually: back to the top, or to the bottom when
+        // already at the top. Dragging past the threshold jumps right away in that direction
+        binding.scrollJumpHolder.setOnClickListener {
+            scrollDirectoriesToEdge(toTop = binding.directoriesGrid.canScrollVertically(-1))
+        }
+        binding.scrollJumpHolder.setOnTouchListener { view, event ->
+            handleScrollJumpTouch(view, event)
+        }
+    }
+
+    private fun handleScrollJumpTouch(view: View, event: MotionEvent): Boolean {
+        val threshold = SCROLL_JUMP_DRAG_THRESHOLD_DP * resources.displayMetrics.density
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                mJumpTouchStartY = event.y
+                mJumpTouchFired = false
+                (view.parent as? ViewGroup)?.requestDisallowInterceptTouchEvent(true)
+                setScrollJumpIcon(R.drawable.ic_scroll_jump_vector)
+            }
+            MotionEvent.ACTION_MOVE -> handleScrollJumpMove(threshold, event)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (event.actionMasked == MotionEvent.ACTION_UP && !mJumpTouchFired) {
+                    view.performClick()
+                }
+                setScrollJumpIcon(R.drawable.ic_scroll_jump_vector)
+            }
+        }
+        return true
+    }
+
+    private fun handleScrollJumpMove(threshold: Float, event: MotionEvent) {
+        if (mJumpTouchFired) {
+            return
+        }
+
+        val dy = event.y - mJumpTouchStartY
+        val toTop = when {
+            dy <= -threshold -> true
+            dy >= threshold -> false
+            else -> return
+        }
+
+        mJumpTouchFired = true
+        val directionIcon = if (toTop) {
+            R.drawable.ic_scroll_top_vector
+        } else {
+            R.drawable.ic_scroll_bottom_vector
+        }
+        setScrollJumpIcon(directionIcon)
+        scrollDirectoriesToEdge(toTop = toTop)
+    }
+
+    private fun setScrollJumpIcon(res: Int) {
+        if (res != mJumpIconRes) {
+            mJumpIconRes = res
+            binding.scrollJumpIcon.setImageResource(res)
+        }
+    }
+
+    private fun scrollDirectoriesToEdge(toTop: Boolean) {
+        val layoutManager = binding.directoriesGrid.layoutManager as? MyGridLayoutManager ?: return
+        if (toTop) {
+            layoutManager.scrollToPositionWithOffset(0, 0)
+            return
+        }
+
+        // anchor one screen above the end so the last screen renders full, like a fastscroller
+        // drag all the way down does
+        val itemCount = binding.directoriesGrid.adapter?.itemCount ?: 0
+        if (itemCount == 0) {
+            return
+        }
+
+        val firstVisible = layoutManager.findFirstVisibleItemPosition()
+        val visibleCount = layoutManager.findLastVisibleItemPosition() - firstVisible + 1
+        layoutManager.scrollToPositionWithOffset((itemCount - visibleCount).coerceAtLeast(0), 0)
+        finishScrollToRealBottom()
+    }
+
+    // the anchored jump above can land a row or two short of the end, the measured visible span
+    // slightly overshoots the real screen capacity. scrollBy clamps at the list's actual scroll
+    // range, so this extra step always parks it flush with the bottom, no matter how the
+    // anchored layout landed
+    private fun finishScrollToRealBottom() {
+        binding.directoriesGrid.post {
+            binding.directoriesGrid.scrollBy(0, binding.directoriesGrid.height)
         }
     }
 
@@ -1559,6 +1675,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         binding.directoriesEmptyPlaceholder2.underlineText()
         binding.directoriesFastscroller.beVisibleIf(binding.directoriesEmptyPlaceholder.isGone())
         binding.shufflePlayHolder.beVisibleIf(dirs.isNotEmpty() && !mIsThirdPartyIntent)
+        updateScrollJumpButton()
     }
 
     private fun setupAdapter(
@@ -1605,6 +1722,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 runOnUiThread {
                     binding.directoriesGrid.adapter = this
                     setupScrollDirection()
+                    updateScrollJumpButton()
 
                     if (config.viewTypeFolders == VIEW_TYPE_LIST && areSystemAnimationsEnabled) {
                         binding.directoriesGrid.scheduleLayoutAnimation()
@@ -1622,6 +1740,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 checkPlaceholderVisibility(dirsToShow)
 
                 (binding.directoriesGrid.adapter as? DirectoryAdapter)?.updateDirs(dirsToShow)
+                updateScrollJumpButton()
             }
         }
 
