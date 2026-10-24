@@ -128,6 +128,7 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
     private val mHideSeekDeltaRunnable = Runnable { binding.videoSeekDeltaPill.fadeOut() }
 
     private var mIgnoreCloseDown = false
+    private var mIsSeekGestureCanceled = false
     private var mTouchSlop = 0
     private var mOriginalBrightness: Float? = null
     private lateinit var mPlaybackSpeedPill: TextView
@@ -775,6 +776,7 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
     private fun handleEvent(event: MotionEvent) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                mIsSeekGestureCanceled = false
                 mTouchDownX = event.rawX
                 mTouchDownY = event.rawY
                 mTouchDownTime = System.currentTimeMillis()
@@ -783,8 +785,13 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
 
             MotionEvent.ACTION_POINTER_DOWN -> {
                 mIgnoreCloseDown = true
+                // a second finger starts a pinch zoom: abort the seek drag and block seeking
+                // until the next touch down, so stale move offsets cannot snap the progress
+                endSeekDrag()
+                mIsSeekGestureCanceled = true
             }
             MotionEvent.ACTION_MOVE -> {
+                if (mIsSeekGestureCanceled || event.pointerCount > 1) return
                 val diffX = event.rawX - mTouchDownX
                 val diffY = event.rawY - mTouchDownY
 
@@ -827,24 +834,28 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
                 }
 
                 mIgnoreCloseDown = false
-                if (mIsDragged) {
-                    if (mIsFullscreen) {
-                        arrayOf(
-                            binding.bottomVideoTimeHolder.videoCurrTime,
-                            binding.bottomVideoTimeHolder.videoSeekbar,
-                            binding.bottomVideoTimeHolder.videoDuration,
-                        ).forEach {
-                            it.animate().alpha(0f).start()
-                        }
-                    }
-
-                    if (!mIsPlaying) {
-                        mPlayWhenReadyHandler.removeCallbacksAndMessages(null)
-                    }
-                }
-                mIsDragged = false
+                endSeekDrag()
             }
         }
+    }
+
+    private fun endSeekDrag() {
+        if (mIsDragged) {
+            if (mIsFullscreen) {
+                arrayOf(
+                    binding.bottomVideoTimeHolder.videoCurrTime,
+                    binding.bottomVideoTimeHolder.videoSeekbar,
+                    binding.bottomVideoTimeHolder.videoDuration,
+                ).forEach {
+                    it.animate().alpha(0f).start()
+                }
+            }
+
+            if (!mIsPlaying) {
+                mPlayWhenReadyHandler.removeCallbacksAndMessages(null)
+            }
+        }
+        mIsDragged = false
     }
 
     private fun handleNextFile() {

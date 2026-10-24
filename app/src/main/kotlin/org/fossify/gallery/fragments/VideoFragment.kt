@@ -173,6 +173,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
     private var mSeekTouchDownX = 0f
     private var mSeekTouchDownY = 0f
     private var mProgressAtDown = 0L
+    private var mIsSeekGestureCanceled = false
     private var mDragThreshold = 0f
     private var mScreenWidth = 0
 
@@ -1099,12 +1100,30 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
     private fun handleSeekEvent(event: MotionEvent) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                mIsSeekGestureCanceled = false
                 mSeekTouchDownX = event.rawX
                 mSeekTouchDownY = event.rawY
                 mProgressAtDown = mExoPlayer?.currentPosition ?: 0L
             }
 
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                // a second finger starts a pinch zoom: abort the seek drag and block seeking
+                // until the next touch down, so stale move offsets cannot snap the progress
+                if (mIsDragged) {
+                    binding.videoSeekDeltaPill.fadeOut()
+                    if (mIsFullscreen) {
+                        mTimeHolder.fadeOut()
+                    }
+                    if (!mIsPlaying) {
+                        mPlayWhenReadyHandler.removeCallbacksAndMessages(null)
+                    }
+                }
+                mIsDragged = false
+                mIsSeekGestureCanceled = true
+            }
+
             MotionEvent.ACTION_MOVE -> {
+                if (mIsSeekGestureCanceled || event.pointerCount > 1) return
                 val diffX = event.rawX - mSeekTouchDownX
                 val diffY = event.rawY - mSeekTouchDownY
 
