@@ -104,7 +104,6 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
         private const val UPDATE_INTERVAL_MS = 250L
         private const val PLAY_WHEN_READY_DRAG_DELAY = 100L
         private const val TOUCH_HOLD_DURATION_MS = 500L
-        private const val TOUCH_HOLD_SPEED_MULTIPLIER = 2.0f
         private const val TOUCH_SLOP_DIVIDER = 3
     }
 
@@ -150,7 +149,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
         mIsLongPressActive = true
         mOriginalPlaybackSpeed = mExoPlayer?.playbackParameters?.speed ?: mConfig.playbackSpeed
         mView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        updatePlaybackSpeed(TOUCH_HOLD_SPEED_MULTIPLIER)
+        updatePlaybackSpeed(mConfig.holdPlaybackSpeed)
 
         mPlaybackSpeedPill.fadeIn()
     }
@@ -215,6 +214,10 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
 
             mSeekBar = bottomVideoTimeHolder.videoSeekbar
             mPlaybackSpeedPill = playbackSpeedPill
+            mPlaybackSpeedPill.text = getString(
+                R.string.playback_speed_display_text,
+                DecimalFormat("#.##").format(mConfig.holdPlaybackSpeed)
+            )
             mSeekBar.setOnSeekBarChangeListener(this@VideoFragment)
             // adding an empty click listener just to avoid ripple animation at toggling fullscreen
             mSeekBar.setOnClickListener { }

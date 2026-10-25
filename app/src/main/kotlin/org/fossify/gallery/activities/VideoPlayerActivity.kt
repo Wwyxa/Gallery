@@ -146,14 +146,19 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
         mPlaybackSpeedPill = binding.playbackSpeedPill
+        mPlaybackSpeedPill.text = getString(
+            R.string.playback_speed_display_text,
+            DecimalFormat("#.##").format(config.holdPlaybackSpeed)
+        )
         mTouchSlop = (ViewConfiguration.get(this).scaledTouchSlop) / TOUCH_SLOP_DIVIDER
         videoGestureHelper = VideoGestureHelper(
             touchSlop = mTouchSlop,
             callbacks = VideoGestureCallbacks(
                 isPlaying = { mIsPlaying },
                 getCurrentSpeed = { config.playbackSpeed },
+                getHoldSpeed = { config.holdPlaybackSpeed },
                 setPlaybackSpeed = { speed ->
-                    mExoPlayer?.setPlaybackSpeed(speed) // Set to 2x speed
+                    mExoPlayer?.setPlaybackSpeed(speed)
                     updatePlaybackSpeed(speed)
                 },
                 showPill = { mPlaybackSpeedPill.fadeIn() },

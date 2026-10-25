@@ -21,6 +21,7 @@ import org.fossify.gallery.models.AlbumCover
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import java.text.DecimalFormat
 import java.util.Locale
 import kotlin.system.exitProcess
 
@@ -86,6 +87,7 @@ class SettingsActivity : SimpleActivity() {
         setupAllowVideoGestures()
         setupAllowVideoSeekGestures()
         setupVideoSkipInterval()
+        setupHoldPlaybackSpeed()
         setupAllowVideoDoubleTapSeek()
         setupAllowDownGesture()
         setupAllowRotatingWithGestures()
@@ -532,6 +534,20 @@ class SettingsActivity : SimpleActivity() {
             RadioGroupDialog(this, ArrayList(items), config.videoSkipSeconds) {
                 config.videoSkipSeconds = it as Int
                 binding.settingsVideoSkipInterval.text = getString(R.string.video_skip_seconds, config.videoSkipSeconds)
+            }
+        }
+    }
+
+    private fun setupHoldPlaybackSpeed() {
+        val speeds = listOf(1.5f, 2f, 2.5f, 3f, 4f)
+        binding.settingsHoldPlaybackSpeed.text = "${DecimalFormat("#.##").format(config.holdPlaybackSpeed)}x"
+        binding.settingsHoldPlaybackSpeedHolder.setOnClickListener {
+            val items = ArrayList(speeds.mapIndexed { index, speed ->
+                RadioItem(index, "${DecimalFormat("#.##").format(speed)}x")
+            })
+            RadioGroupDialog(this, items, speeds.indexOf(config.holdPlaybackSpeed)) {
+                config.holdPlaybackSpeed = speeds[it as Int]
+                binding.settingsHoldPlaybackSpeed.text = "${DecimalFormat("#.##").format(config.holdPlaybackSpeed)}x"
             }
         }
     }
@@ -1004,6 +1020,7 @@ class SettingsActivity : SimpleActivity() {
                 put(ALLOW_VIDEO_GESTURES, config.allowVideoGestures)
                 put(VIDEO_SKIP_SECONDS, config.videoSkipSeconds)
                 put(ALLOW_VIDEO_DOUBLE_TAP_SEEK, config.allowVideoDoubleTapSeek)
+                put(HOLD_PLAYBACK_SPEED, config.holdPlaybackSpeed)
                 put(ANIMATE_GIFS, config.animateGifs)
                 put(CROP_THUMBNAILS, config.cropThumbnails)
                 put(SHOW_THUMBNAIL_VIDEO_DURATION, config.showThumbnailVideoDuration)
@@ -1152,6 +1169,7 @@ class SettingsActivity : SimpleActivity() {
                 ALLOW_VIDEO_GESTURES -> config.allowVideoGestures = value.toBoolean()
                 VIDEO_SKIP_SECONDS -> config.videoSkipSeconds = value.toInt()
                 ALLOW_VIDEO_DOUBLE_TAP_SEEK -> config.allowVideoDoubleTapSeek = value.toBoolean()
+                HOLD_PLAYBACK_SPEED -> config.holdPlaybackSpeed = value.toString().toFloat()
                 ANIMATE_GIFS -> config.animateGifs = value.toBoolean()
                 CROP_THUMBNAILS -> config.cropThumbnails = value.toBoolean()
                 SHOW_THUMBNAIL_VIDEO_DURATION -> config.showThumbnailVideoDuration = value.toBoolean()

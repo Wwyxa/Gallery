@@ -207,6 +207,7 @@
     <string name="video_skip_interval">Fast-forward / rewind interval</string>
     <string name="video_skip_seconds">%1$d s</string>
     <string name="playback_speed">Playback speed</string>
+    <string name="hold_playback_speed">Long-press playback speed</string>
     <string name="show_media_count">Show folder media count on the main view</string>
     <string name="show_extended_details">Show extended details over fullscreen media</string>
     <string name="manage_extended_details">Manage extended details</string>
