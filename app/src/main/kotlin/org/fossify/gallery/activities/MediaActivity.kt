@@ -97,6 +97,7 @@ import org.fossify.gallery.helpers.GET_VIDEO_INTENT
 import org.fossify.gallery.helpers.GridSpacingItemDecoration
 import org.fossify.gallery.helpers.IS_FROM_SEARCH
 import org.fossify.gallery.helpers.IS_IN_RECYCLE_BIN
+import org.fossify.gallery.helpers.LOCATE_PATH
 import org.fossify.gallery.helpers.MAX_COLUMN_COUNT
 import org.fossify.gallery.helpers.MOSAIC_TOTAL_SPANS
 import org.fossify.gallery.helpers.MediaFetcher
@@ -135,6 +136,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
     private var mIsGettingMedia = false
     private var mAllowPickingMultiple = false
     private var mShowAll = false
+    private var mLocatePath = ""
     private var mLoadedInitialPhotos = false
     private var mJumpTouchStartY = 0f
     private var mJumpTouchFired = false
@@ -184,6 +186,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             finish()
             return
         }
+        mLocatePath = intent.getStringExtra(LOCATE_PATH) ?: ""
 
         setupOptionsMenu()
         refreshMenuItems()
@@ -1169,6 +1172,36 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
         }
     }
 
+    // consumes the locate request handed over by the shuffle viewer: scrolls the list so the
+    // requested medium sits at the top of the grid, clear of the bottom floating buttons
+    private fun tryScrollToLocatedMedia(isFromCache: Boolean) {
+        val locatePath = mLocatePath
+        if (locatePath.isEmpty()) {
+            return
+        }
+
+        val position = mMedia.indexOfFirst { (it as? Medium)?.path == locatePath }
+        if (position == -1) {
+            // the cached list may be stale, keep the request pending for the fresh fetch
+            if (!isFromCache) {
+                mLocatePath = ""
+            }
+            return
+        }
+
+        mLocatePath = ""
+        binding.mediaGrid.post {
+            when (val layoutManager = binding.mediaGrid.layoutManager) {
+                is MyGridLayoutManager -> layoutManager.scrollToPositionWithOffset(position, 0)
+                // staggered has no offset API, overshooting by a row keeps the item clear of the
+                // bottom floating buttons
+                is StaggeredGridLayoutManager -> layoutManager.scrollToPosition(
+                    (position + layoutManager.spanCount).coerceAtMost(mMedia.lastIndex)
+                )
+            }
+        }
+    }
+
     private fun scrollMediaToEdge(toTop: Boolean) {
         val itemCount = binding.mediaGrid.adapter?.itemCount ?: 0
         if (itemCount == 0) {
@@ -1260,6 +1293,7 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             binding.shufflePlayHolder.beVisibleIf(media.isNotEmpty() && !isThirdPartyIntent())
             updateScrollJumpButton()
             setupAdapter()
+            tryScrollToLocatedMedia(isFromCache)
         }
 
         mLatestMediaId = getLatestMediaId()

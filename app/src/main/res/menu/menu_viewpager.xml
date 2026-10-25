@@ -4,6 +4,12 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:ignore="AppCompatResource">
     <item
+        android:id="@+id/menu_locate_in_folder"
+        android:icon="@drawable/ic_locate_in_folder_vector"
+        android:title="@string/locate_in_folder"
+        android:visible="false"
+        app:showAsAction="always" />
+    <item
         android:id="@+id/menu_save_as"
         android:icon="@drawable/ic_check_vector"
         android:title="@string/save_as"

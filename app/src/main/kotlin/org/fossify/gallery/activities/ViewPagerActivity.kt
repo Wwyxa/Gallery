@@ -149,6 +149,7 @@ import org.fossify.gallery.helpers.BOTTOM_ACTION_SLIDESHOW
 import org.fossify.gallery.helpers.BOTTOM_ACTION_TOGGLE_FAVORITE
 import org.fossify.gallery.helpers.BOTTOM_ACTION_TOGGLE_VISIBILITY
 import org.fossify.gallery.helpers.ColorModeHelper
+import org.fossify.gallery.helpers.DIRECTORY
 import org.fossify.gallery.helpers.EXT_NAME
 import org.fossify.gallery.helpers.FadePageTransformer
 import org.fossify.gallery.helpers.GO_TO_NEXT_ITEM
@@ -156,6 +157,7 @@ import org.fossify.gallery.helpers.GO_TO_PREV_ITEM
 import org.fossify.gallery.helpers.HIDE_SYSTEM_UI_DELAY
 import org.fossify.gallery.helpers.IS_FROM_SEARCH
 import org.fossify.gallery.helpers.IS_VIEW_INTENT
+import org.fossify.gallery.helpers.LOCATE_PATH
 import org.fossify.gallery.helpers.MAX_PRINT_SIDE_SIZE
 import org.fossify.gallery.helpers.PATH
 import org.fossify.gallery.helpers.PORTRAIT_PATH
@@ -326,6 +328,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
         runOnUiThread {
             val rotationDegrees = getCurrentPhotoFragment()?.mCurrentRotationDegrees ?: 0
             binding.mediumViewerToolbar.menu.apply {
+                findItem(R.id.menu_locate_in_folder).isVisible = mIsShufflePlay
                 findItem(R.id.menu_show_on_map).isVisible = visibleBottomActions and BOTTOM_ACTION_SHOW_ON_MAP == 0
                 findItem(R.id.menu_slideshow).isVisible = visibleBottomActions and BOTTOM_ACTION_SLIDESHOW == 0
                 findItem(R.id.menu_properties).isVisible = visibleBottomActions and BOTTOM_ACTION_PROPERTIES == 0
@@ -379,6 +382,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
             }
 
             when (menuItem.itemId) {
+                R.id.menu_locate_in_folder -> locateInFolder()
                 R.id.menu_set_as -> setAs(getCurrentPath())
                 R.id.menu_slideshow -> initSlideshow()
                 R.id.menu_copy_to -> checkMediaManagementAndCopy(true)
@@ -419,6 +423,18 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPagerFragment.FragmentListen
 
         binding.mediumViewerToolbar.setNavigationOnClickListener {
             finish()
+        }
+    }
+
+    // opens the folder of the currently viewed shuffled medium at its list position, the shuffle
+    // session stays below on the back stack so back returns to it at the same position
+    private fun locateInFolder() {
+        val medium = getCurrentMedium() ?: return
+        Intent(this, MediaActivity::class.java).apply {
+            putExtra(DIRECTORY, if (medium.getIsInRecycleBin()) RECYCLE_BIN else medium.path.getParentPath())
+            putExtra(SKIP_AUTHENTICATION, intent.getBooleanExtra(SKIP_AUTHENTICATION, false))
+            putExtra(LOCATE_PATH, medium.path)
+            startActivity(this)
         }
     }
 

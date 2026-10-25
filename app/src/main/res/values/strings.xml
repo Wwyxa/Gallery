@@ -153,6 +153,7 @@
 
     <!-- Shuffle play -->
     <string name="shuffle_play">Shuffle play</string>
+    <string name="locate_in_folder">Locate in folder</string>
 
     <!-- Scroll to edge -->
     <string name="scroll_to_top_or_bottom">Scroll to top or bottom</string>
