@@ -113,6 +113,7 @@ import org.fossify.gallery.helpers.SHOW_TEMP_HIDDEN_DURATION
 import org.fossify.gallery.helpers.SHUFFLE_PLAY
 import org.fossify.gallery.helpers.SKIP_AUTHENTICATION
 import org.fossify.gallery.helpers.SLIDESHOW_START_ON_ENTER
+import org.fossify.gallery.helpers.ShuffleCollectionHelper
 import org.fossify.gallery.helpers.VIDEO_PLAYER_APP
 import org.fossify.gallery.helpers.VIDEO_PLAYER_SYSTEM
 import org.fossify.gallery.helpers.VIEW_TYPE_MOSAIC
@@ -1084,7 +1085,13 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             return
         }
 
-        ViewPagerActivity.shuffleMedia = mediumList.shuffled().toCollection(ArrayList())
+        // collection aware shuffling keeps numbered filename collections contiguous and
+        // in order, the first entry is the top of whichever block comes first
+        ViewPagerActivity.shuffleMedia = if (config.shufflePlayKeepCollections) {
+            ShuffleCollectionHelper.buildShuffledSequence(mediumList)
+        } else {
+            mediumList.shuffled().toCollection(ArrayList())
+        }
         Intent(this, ViewPagerActivity::class.java).apply {
             putExtra(SKIP_AUTHENTICATION, shouldSkipAuthentication())
             putExtra(PATH, ViewPagerActivity.shuffleMedia.first().path)

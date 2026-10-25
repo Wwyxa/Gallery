@@ -153,6 +153,7 @@
 
     <!-- Shuffle play -->
     <string name="shuffle_play">Shuffle play</string>
+    <string name="shuffle_play_keep_collections">Keep numbered collections in order while shuffle playing</string>
     <string name="locate_in_folder">Locate in folder</string>
 
     <!-- Scroll to edge -->

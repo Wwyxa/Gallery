@@ -62,6 +62,7 @@ class SettingsActivity : SimpleActivity() {
         setupManageExcludedFolders()
         setupManageHiddenFolders()
         setupSearchAllFiles()
+        setupShufflePlayKeepCollections()
         setupShowHiddenItems()
         setupAutoplayVideos()
         setupRememberLastVideo()
@@ -272,6 +273,14 @@ class SettingsActivity : SimpleActivity() {
         binding.settingsSearchAllFilesHolder.setOnClickListener {
             binding.settingsSearchAllFiles.toggle()
             config.searchAllFilesByDefault = binding.settingsSearchAllFiles.isChecked
+        }
+    }
+
+    private fun setupShufflePlayKeepCollections() {
+        binding.settingsShufflePlayKeepCollections.isChecked = config.shufflePlayKeepCollections
+        binding.settingsShufflePlayKeepCollectionsHolder.setOnClickListener {
+            binding.settingsShufflePlayKeepCollections.toggle()
+            config.shufflePlayKeepCollections = binding.settingsShufflePlayKeepCollections.isChecked
         }
     }
 
@@ -1087,6 +1096,7 @@ class SettingsActivity : SimpleActivity() {
                 put(THUMBNAIL_SPACING, config.thumbnailSpacing)
                 put(FILE_ROUNDED_CORNERS, config.fileRoundedCorners)
                 put(SEARCH_ALL_FILES_BY_DEFAULT, config.searchAllFilesByDefault)
+                put(SHUFFLE_PLAY_KEEP_COLLECTIONS, config.shufflePlayKeepCollections)
             }
 
             exportSettings(configItems)
@@ -1235,6 +1245,7 @@ class SettingsActivity : SimpleActivity() {
                 THUMBNAIL_SPACING -> config.thumbnailSpacing = value.toInt()
                 FILE_ROUNDED_CORNERS -> config.fileRoundedCorners = value.toBoolean()
                 SEARCH_ALL_FILES_BY_DEFAULT -> config.searchAllFilesByDefault = value.toBoolean()
+                SHUFFLE_PLAY_KEEP_COLLECTIONS -> config.shufflePlayKeepCollections = value.toBoolean()
                 ALBUM_COVERS -> {
                     val existingCovers = config.parseAlbumCovers()
                     val existingCoverPaths = existingCovers.map { it.path }.toMutableList() as ArrayList<String>

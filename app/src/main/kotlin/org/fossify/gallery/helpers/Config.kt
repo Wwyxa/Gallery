@@ -189,6 +189,10 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getFloat(HOLD_PLAYBACK_SPEED, 2f)
         set(holdPlaybackSpeed) = prefs.edit().putFloat(HOLD_PLAYBACK_SPEED, holdPlaybackSpeed).apply()
 
+    var shufflePlayKeepCollections: Boolean
+        get() = prefs.getBoolean(SHUFFLE_PLAY_KEEP_COLLECTIONS, false)
+        set(shufflePlayKeepCollections) = prefs.edit().putBoolean(SHUFFLE_PLAY_KEEP_COLLECTIONS, shufflePlayKeepCollections).apply()
+
     var cropThumbnails: Boolean
         get() = prefs.getBoolean(CROP_THUMBNAILS, true)
         set(cropThumbnails) = prefs.edit().putBoolean(CROP_THUMBNAILS, cropThumbnails).apply()

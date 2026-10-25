@@ -140,6 +140,7 @@ import org.fossify.gallery.helpers.SHOW_ALL
 import org.fossify.gallery.helpers.SHOW_TEMP_HIDDEN_DURATION
 import org.fossify.gallery.helpers.SHUFFLE_PLAY
 import org.fossify.gallery.helpers.SKIP_AUTHENTICATION
+import org.fossify.gallery.helpers.ShuffleCollectionHelper
 import org.fossify.gallery.helpers.TYPE_GIFS
 import org.fossify.gallery.helpers.TYPE_IMAGES
 import org.fossify.gallery.helpers.TYPE_PORTRAITS
@@ -784,9 +785,22 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     }
 
     private fun launchShufflePlay(mediumList: List<Medium>) {
+        // collection aware shuffling replaces the flat random order with shuffled blocks,
+        // where a numbered filename collection stays contiguous and in order
+        val blocks = if (config.shufflePlayKeepCollections) {
+            ShuffleCollectionHelper.buildShuffledBlocks(mediumList)
+        } else {
+            null
+        }
+
         // cached rows can be stale, make sure the first item really exists so the viewer does
-        // not open on a broken tile; later items are left alone, stale ones just show an error
-        val first = mediumList.firstOrNull { getDoesFilePathExist(it.path) }
+        // not open on a broken tile; later items are left alone, stale ones just show an error.
+        // with blocks the entry snaps to the first existing member of the first playable
+        // block, so a collection is entered at its top and plays through completely
+        val first = when (blocks) {
+            null -> mediumList.firstOrNull { getDoesFilePathExist(it.path) }
+            else -> blocks.firstNotNullOfOrNull { block -> block.firstOrNull { getDoesFilePathExist(it.path) } }
+        }
 
         runOnUiThread {
             mIsShuffleLoading = false
@@ -796,7 +810,11 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 return@runOnUiThread
             }
 
-            ViewPagerActivity.shuffleMedia = ArrayList(mediumList)
+            ViewPagerActivity.shuffleMedia = if (blocks != null) {
+                ShuffleCollectionHelper.flatten(blocks)
+            } else {
+                ArrayList(mediumList)
+            }
             Intent(this, ViewPagerActivity::class.java).apply {
                 putExtra(PATH, first.path)
                 putExtra(SHUFFLE_PLAY, true)
